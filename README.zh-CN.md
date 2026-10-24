@@ -235,10 +235,12 @@ logread -e anytls-zig
 * 放到 `feeds/luci/applications/luci-app-anytls-zig/`（或
   `package/luci-app-anytls-zig/`，并调整 `luci.mk` 的 include 路径）；
 * 在 `make menuconfig` 中选中 `luci-app-anytls-zig`（依赖 `anytls-zig`）；
-* 页面位于 **服务 → AnyTLS Zig**，提供英文与简体中文（`zh_Hans`）。
+* 页面位于 **服务 → AnyTLS Zig**，提供英文与简体中文（LuCI 语言代码 `zh-cn`，
+  词条来自 `po/zh_Hans`）。
 
-CI 会生成 `luci-app-anytls-zig_<version>_noarch.apk`；翻译在打包时编译为 `.lmo`，
-不需要额外的 i18n 包。
+CI 会生成 `luci-app-anytls-zig_<version>_noarch.apk`；翻译在打包时编译为
+`/usr/lib/lua/luci/i18n/anytls-zig.zh-cn.lmo`，不需要额外的 i18n 包。LuCI 按运行时
+语言代码（`zh-cn`）查找词条，所以文件名不是 `zh_Hans.lmo`。
 
 表单覆盖监听地址、服务器/SNI、密码、CA 证书、校验开关、超时、会话池、stream
 上限和日志级别。密码保存在 `/etc/config/anytls-zig`，请把该文件权限设为 600。

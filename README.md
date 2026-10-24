@@ -254,10 +254,12 @@ above:
   `package/luci-app-anytls-zig/` and adjust the `luci.mk` include),
 * select `luci-app-anytls-zig` in `make menuconfig` (depends on `anytls-zig`),
 * the page appears under **Services → AnyTLS Zig** in English and Simplified
-  Chinese (`zh_Hans`).
+  Chinese (LuCI language code `zh-cn`, translated from `po/zh_Hans`).
 
 CI builds this as `luci-app-anytls-zig_<version>_noarch.apk`; the translation is
-compiled to `.lmo` at package time, so no extra i18n package is needed.
+compiled to `/usr/lib/lua/luci/i18n/anytls-zig.zh-cn.lmo` at package time, so no
+extra i18n package is needed. LuCI finds catalogs by the runtime language code
+(`zh-cn`), which is why the file is not named `zh_Hans.lmo`.
 
 The form covers the listen address, server/SNI, password, CA bundle,
 verification switch, timeouts, pool sizes, stream limit and log level. The

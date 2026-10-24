@@ -202,7 +202,7 @@ jobs:
             "out/luci-app-anytls-zig_${{ steps.ver.outputs.apk }}_noarch.apk"
           "$APK" adbdump out/luci-app-anytls-zig_*.apk | grep -q "name: luci-app-anytls-zig"
           "$APK" adbdump out/luci-app-anytls-zig_*.apk | grep -q "arch: noarch"
-          "$APK" adbdump out/luci-app-anytls-zig_*.apk | grep -q "anytls-zig.zh_Hans.lmo"
+          "$APK" adbdump out/luci-app-anytls-zig_*.apk | grep -q "anytls-zig.zh-cn.lmo"
           ls -l out/*.apk
 
       - name: Package armhf feed alias

@@ -40,8 +40,11 @@ cp "$app/root/usr/share/luci/menu.d/luci-app-anytls-zig.json" \
 	"$tmp/usr/share/luci/menu.d/luci-app-anytls-zig.json"
 cp "$app/root/usr/share/rpcd/acl.d/luci-app-anytls-zig.json" \
 	"$tmp/usr/share/rpcd/acl.d/luci-app-anytls-zig.json"
+# LuCI loads catalogs with glob *.<lang>.lmo where <lang> is the runtime
+# language code (LC alias, "zh-cn"), not the gettext directory name
+# ("zh_Hans"). Install under the code the dispatcher looks for.
 python3 "$here/scripts/po2lmo.py" "$app/po/zh_Hans/anytls-zig.po" \
-	"$tmp/usr/lib/lua/luci/i18n/anytls-zig.zh_Hans.lmo"
+	"$tmp/usr/lib/lua/luci/i18n/anytls-zig.zh-cn.lmo"
 
 find "$tmp" -type f -exec chmod 644 {} +
 # ADB records mtimes; normalize them so rebuilds are identical.
