@@ -62,49 +62,31 @@ jobs:
             cpu: mips32r2
             match: "LSB executable, MIPS"
             abi: mips
-            cpu_arch: ""
             owrt_arch: mipsel_24kc
-            extra_arches: ""
           - name: mips-musleabi
             target: mips-linux-musleabi
             cpu: mips32r2
             match: "MSB executable, MIPS"
             abi: mips
-            cpu_arch: ""
             owrt_arch: mips_24kc
-            extra_arches: ""
           - name: armv7-musleabihf
             target: arm-linux-musleabihf
-            cpu: cortex_a7
+            cpu: cortex_a7-neon
             match: "ARM, EABI5"
             abi: ""
-            cpu_arch: ""
-            owrt_arch: arm_cortex-a7_neon-vfpv4
-            extra_arches: ""
-          - name: armel-musleabi
-            target: arm-linux-musleabi
-            cpu: arm926ej_s
-            match: "ARM, EABI5"
-            abi: ""
-            cpu_arch: v5TE
-            owrt_arch: arm_arm926ej-s
-            extra_arches: armel
+            owrt_arch: arm_cortex-a7
           - name: aarch64-musl
             target: aarch64-linux-musl
             cpu: baseline
             match: "aarch64"
             abi: ""
-            cpu_arch: ""
             owrt_arch: aarch64_cortex-a53
-            extra_arches: ""
           - name: x86_64-musl
             target: x86_64-linux-musl
             cpu: baseline
             match: "x86-64"
             abi: ""
-            cpu_arch: ""
             owrt_arch: x86_64
-            extra_arches: ""
     steps:
       - uses: actions/checkout@v4
 
@@ -158,19 +140,25 @@ jobs:
           cp "out/${{ matrix.name }}/bin/anytls-zig" "out/anytls-zig-${{ matrix.name }}"
           chmod +x "out/anytls-zig-${{ matrix.name }}"
           scripts/check-elf.sh "out/anytls-zig-${{ matrix.name }}" \
-            "${{ matrix.match }}" "${{ matrix.abi }}" "${{ matrix.cpu_arch }}"
+            "${{ matrix.match }}" "${{ matrix.abi }}"
           sha256sum "out/anytls-zig-${{ matrix.name }}"
 
       - name: Package OpenWrt apk
         run: |
-          for arch in ${{ matrix.owrt_arch }} ${{ matrix.extra_arches }}; do
-            sudo env "APK=$APK" scripts/make-apk.sh "out/anytls-zig-${{ matrix.name }}" \
-              "$arch" "${{ steps.ver.outputs.apk }}" \
-              "out/anytls-zig_${{ steps.ver.outputs.apk }}_$arch.apk"
-          done
-          for f in out/anytls-zig_*.apk; do
-            "$APK" adbdump "$f" | grep -q "name: anytls-zig" || exit 1
-          done
+          sudo env "APK=$APK" scripts/make-apk.sh "out/anytls-zig-${{ matrix.name }}" \
+            "${{ matrix.owrt_arch }}" "${{ steps.ver.outputs.apk }}" \
+            "out/anytls-zig_${{ steps.ver.outputs.apk }}_${{ matrix.owrt_arch }}.apk"
+          "$APK" adbdump out/anytls-zig_*.apk | grep -q "name: anytls-zig"
+          "$APK" adbdump out/anytls-zig_*.apk | grep -q "arch: ${{ matrix.owrt_arch }}"
+          ls -l out/*.apk
+
+      - name: Package armhf feed alias
+        if: matrix.name == 'armv7-musleabihf'
+        run: |
+          sudo env "APK=$APK" scripts/make-apk.sh "out/anytls-zig-${{ matrix.name }}" \
+            arm_cortex-a7_neon-vfpv4 "${{ steps.ver.outputs.apk }}" \
+            "out/anytls-zig_${{ steps.ver.outputs.apk }}_arm_cortex-a7_neon-vfpv4.apk"
+          "$APK" adbdump out/anytls-zig_*_arm_cortex-a7_neon-vfpv4.apk | grep -q "name: anytls-zig"
           ls -l out/*.apk
 
       - uses: actions/upload-artifact@v4
@@ -215,6 +203,15 @@ jobs:
           "$APK" adbdump out/luci-app-anytls-zig_*.apk | grep -q "name: luci-app-anytls-zig"
           "$APK" adbdump out/luci-app-anytls-zig_*.apk | grep -q "arch: noarch"
           "$APK" adbdump out/luci-app-anytls-zig_*.apk | grep -q "anytls-zig.zh_Hans.lmo"
+          ls -l out/*.apk
+
+      - name: Package armhf feed alias
+        if: matrix.name == 'armv7-musleabihf'
+        run: |
+          sudo env "APK=$APK" scripts/make-apk.sh "out/anytls-zig-${{ matrix.name }}" \
+            arm_cortex-a7_neon-vfpv4 "${{ steps.ver.outputs.apk }}" \
+            "out/anytls-zig_${{ steps.ver.outputs.apk }}_arm_cortex-a7_neon-vfpv4.apk"
+          "$APK" adbdump out/anytls-zig_*_arm_cortex-a7_neon-vfpv4.apk | grep -q "name: anytls-zig"
           ls -l out/*.apk
 
       - uses: actions/upload-artifact@v4

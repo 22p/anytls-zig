@@ -23,7 +23,7 @@ pub const Conn = struct {
     cipher_buf: []u8,
     plain_buf: []u8,
     write_lock: std.Thread.Mutex = .{},
-    closed: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
+    closed: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
 
     pub fn dial(
         alloc: Allocator,
@@ -56,7 +56,7 @@ pub const Conn = struct {
         self.socket_read_buf = self.bufs[2 * one_buf .. 3 * one_buf];
         self.tls_read_buf = self.bufs[3 * one_buf .. 4 * one_buf];
         self.write_lock = .{};
-        self.closed = std.atomic.Value(u32).init(0);
+        self.closed = std.atomic.Value(bool).init(false);
 
         self.socket_reader = self.stream.reader(self.socket_read_buf);
         self.socket_writer = self.stream.writer(self.cipher_buf);
@@ -91,25 +91,25 @@ pub const Conn = struct {
     pub fn writeAll(self: *Conn, data: []const u8) !void {
         self.write_lock.lock();
         defer self.write_lock.unlock();
-        if (self.closed.load(.acquire) != 0) return error.Closed;
+        if (self.closed.load(.acquire)) return error.Closed;
 
         self.client.writer.writeAll(data) catch |e| {
-            self.closed.store(1, .release);
+            self.closed.store(true, .release);
             return e;
         };
         self.client.writer.flush() catch |e| {
-            self.closed.store(1, .release);
+            self.closed.store(true, .release);
             return e;
         };
         self.socket_writer.interface.flush() catch |e| {
-            self.closed.store(1, .release);
+            self.closed.store(true, .release);
             return e;
         };
     }
 
     /// Stops all I/O but leaves the descriptor open until destroy().
     pub fn shutdown(self: *Conn) void {
-        if (self.closed.swap(1, .acq_rel) != 0) return;
+        if (self.closed.swap(true, .acq_rel)) return;
         posix.shutdown(self.fd, .both) catch {};
     }
 

@@ -1,11 +1,10 @@
 #!/bin/sh
 # Verify that a built binary is a statically linked ELF for the expected machine.
 #
-#   scripts/check-elf.sh <file> <machine-substring> [mips-abi] [cpu-arch]
+#   scripts/check-elf.sh <file> <machine-substring> [mips-abi]
 #
 # Example:
 #   scripts/check-elf.sh zig-out/bin/anytls-zig "MIPS32 rel2"
-#   scripts/check-elf.sh zig-out/bin/anytls-zig "ARM, EABI5" "" v5TE
 #   scripts/check-elf.sh zig-out/bin/anytls-zig AArch64
 
 set -eu
@@ -13,7 +12,6 @@ set -eu
 file_path=${1:?usage: check-elf.sh <file> <machine-substring> [mips-abi]}
 machine=${2:?usage: check-elf.sh <file> <machine-substring> [mips-abi]}
 kind=${3:-}
-cpu_arch=${4:-}
 
 if [ ! -f "$file_path" ]; then
 	echo "missing file: $file_path" >&2
@@ -55,11 +53,4 @@ if [ "$kind" = "mips" ]; then
 	}
 fi
 
-if [ -n "$cpu_arch" ]; then
-	readelf -A "$file_path" | grep -q "Tag_CPU_arch: $cpu_arch" || {
-		echo "FAIL: expected CPU arch $cpu_arch" >&2
-		exit 1
-	}
-fi
-
-echo "OK: static $machine${kind:+ ($kind)}${cpu_arch:+ $cpu_arch}"
+echo "OK: static $machine${kind:+ ($kind)}"

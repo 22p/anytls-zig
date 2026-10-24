@@ -90,8 +90,7 @@ zig build -Doptimize=Debug
 
 ```sh
 zig build -Doptimize=ReleaseSmall -Dtarget=aarch64-linux-musl
-zig build -Doptimize=ReleaseSmall -Dtarget=arm-linux-musleabihf -Dcpu=cortex_a7
-zig build -Doptimize=ReleaseSmall -Dtarget=arm-linux-musleabi -Dcpu=arm926ej_s
+zig build -Doptimize=ReleaseSmall -Dtarget=arm-linux-musleabihf -Dcpu=cortex_a7-neon
 zig build -Doptimize=ReleaseSmall -Dtarget=mipsel-linux-musleabi -Dcpu=mips32r2
 
 file zig-out/bin/anytls-zig
@@ -107,12 +106,9 @@ readelf -h -l zig-out/bin/anytls-zig   # 无 INTERP、无 NEEDED
   会命中缓存。
 * 等价的直接命令：
   `zig build-exe src/main.zig -lc -OReleaseSmall -target <triple> -fstrip`
-* ARMv5（`armel`，例如 ARM926）没有 LDREX/STREX。构建时通过内核的
-  `__kuser_cmpxchg` 提供 `__sync_*` 原子操作（`src/armv5_atomic.zig`，与 libgcc 做法
-  相同）；OpenWrt 的 ARMv5 内核默认保留 `CONFIG_KUSER_HELPERS`。该构建已在
-  qemu-arm 下做过 SOCKS、TLS 1.3、10 MB 传输和并发验证。打包时会生成两个 arch
-  标签：`arm_arm926ej-s`（OpenWrt feed 的架构名）和 `armel`（`apk --print-arch`
-  为 armel 的镜像）。
+* 32 位 ARM 构建面向 ARMv7-A + VFPv4，关闭 NEON（`-Dcpu=cortex_a7-neon`），可运行在
+  任意 ARMv7 硬浮点目标上；打包时同时生成 `arm_cortex-a7` 和
+  `arm_cortex-a7_neon-vfpv4` 两个标签。
 * 带 ARMv8 加密扩展的 ARM64 可加 `-Dcpu=baseline+aes+sha2`（吞吐约 1.5 倍）和/或
   `-Doptimize=ReleaseFast`（约 3.5 倍，体积翻倍）。实测数据与取舍见
   [docs/bench-aarch64.md](docs/bench-aarch64.md)。
@@ -192,9 +188,9 @@ anytls-zig -s 'anytls://password@example.com:443?sni=example.com'
 apk add --allow-untrusted anytls-zig_<version>_<arch>.apk
 ```
 
-   `<arch>` 必须与 `apk --print-arch` 一致（例如 `mipsel_24kc`、
-   `arm_arm926ej-s`、`armel`）。armel 构建同时提供 `arm_arm926ej-s` 和 `armel`
-   两个标签；如果仍不一致，可用 `apk add --arch <arch>` 覆盖检查。
+   `<arch>` 取 `cat /etc/apk/arch` 的值（例如 `arm_cortex-a7`、
+   `arm_cortex-a7_neon-vfpv4`、`mipsel_24kc`）。注意 `apk --print-arch` 可能显示
+   apk 二进制编译时的默认架构，与 `/etc/apk/arch` 不一致；安装时以该文件为准。
 
    如果需要 Web 界面，再安装与架构无关的 LuCI 包：
 
@@ -299,9 +295,8 @@ RSS、2 个线程；10 个并发会话加 10 个活跃 stream 时约 2.9 MB（�
 | 半关闭（上传后客户端 `shutdown(WR)`） | 宽限期后有限时间内拆除；结果与参考 Go 客户端一致 |
 | 同端口重复启动 | `AddressInUse`（不会因 SO_REUSEPORT 静默共享端口） |
 | 日志凭据泄漏 | 所有日志中均无密码 |
-| 交叉编译 `mipsel-linux-musleabi` / `mips-linux-musleabi` / `arm-linux-musleabihf` / `arm-linux-musleabi` / `aarch64-linux-musl` / `x86_64-linux-musl` | ELF32 LSB/MSB MIPS32r2 o32 软浮点、ARM EABI5 硬浮点与 ARMv5TE 软浮点、ELF64 aarch64/x86-64，均为静态链接且无动态段 |
-| armel（ARMv5TE）运行时 | 在 qemu-arm 下完成 SOCKS5 + TLS 1.3 + 10 MB 校验 + 4 并发 |
-| OpenWrt apk（`scripts/make-apk.sh`） | ADB v3；用 apk-tools 3.0.8 安装到 chroot 验证，权限与依赖正确，覆盖 6 个目标 / 7 个包 |
+| 交叉编译 `mipsel-linux-musleabi` / `mips-linux-musleabi` / `arm-linux-musleabihf` / `aarch64-linux-musl` / `x86_64-linux-musl` | ELF32 LSB/MSB MIPS32r2 o32 软浮点、ARM EABI5 硬浮点、ELF64 aarch64/x86-64，均为静态链接且无动态段 |
+| OpenWrt apk（`scripts/make-apk.sh`） | ADB v3；用 apk-tools 3.0.8 安装到 chroot 验证，权限与依赖正确，覆盖 5 个目标 / 6 个包 |
 | LuCI apk（`scripts/make-luci-apk.sh`） | ADB v3、`noarch`，可随 `luci-base` + `anytls-zig` 安装；`.lmo` 与官方 `po2lmo` 输出逐字节一致 |
 | aarch64 吞吐 / 延迟 / CPU / RSS | [docs/bench-aarch64.md](docs/bench-aarch64.md)：106–376 MB/s、0.21–0.23 ms、1.3–1.7 MB RSS |
 
