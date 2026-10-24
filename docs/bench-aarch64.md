@@ -1,5 +1,9 @@
 # aarch64 performance
 
+Three aarch64 builds are published from the same source: `ReleaseSmall`
+(generic), `ReleaseSmall` with `+aes+sha2`, and `ReleaseFast` with `+aes+sha2`.
+The table below shows why all three exist.
+
 Loopback measurements of the Zig client and the reference Go client, both
 talking to an unmodified `anytls-go 0.0.13` server. The point is to quantify the
 client's cost (CPU, latency, memory) and the `ReleaseSmall` size/speed
@@ -63,11 +67,12 @@ frame cost, which is why warm requests sit ~0.12–0.14 ms above direct.
 
 ## Analysis
 
-* **`ReleaseSmall` is the throughput bottleneck.** Zig's GHASH implementation
+* **`ReleaseSmall` trades throughput for size.** Zig's GHASH implementation
   skips the 4-/8-block aggregated reduction paths in `ReleaseSmall` to save
-  code. AES-GCM therefore costs ~9.4 s of CPU per GiB and caps one stream at
+  code, so AES-GCM costs ~9.4 s of CPU per GiB and caps one stream at
   ~106 MB/s. This is a size/speed trade-off inside the standard library, not an
-  AnyTLS framing cost.
+  AnyTLS framing cost; the CI publishes all three variants so the choice is
+  explicit.
 * **`+aes+sha2` helps but does not remove it.** The AES and PMULL paths are
   used (verified by disassembly), but GHASH still runs the compact schedule:
   1.5× faster, ~6.0 s/GiB.

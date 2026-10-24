@@ -21,12 +21,6 @@ msgstr ""
 msgid "Settings"
 msgstr ""
 
-msgid "Enable"
-msgstr ""
-
-msgid "Start the client automatically when the system boots."
-msgstr ""
-
 msgid "SOCKS5 listen address"
 msgstr ""
 

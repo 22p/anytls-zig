@@ -40,11 +40,14 @@ here=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d /tmp/anytls-apk.XXXXXX)
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
-mkdir -p "$tmp/usr/bin" "$tmp/etc/init.d" "$tmp/etc/config" "$tmp/etc/anytls-zig"
+mkdir -p "$tmp/usr/bin" "$tmp/etc/init.d" "$tmp/etc/config" "$tmp/etc/rc.d" "$tmp/etc/anytls-zig"
 cp "$binary" "$tmp/usr/bin/anytls-zig"
 cp "$here/openwrt/files/anytls-zig.init" "$tmp/etc/init.d/anytls-zig"
 cp "$here/openwrt/files/anytls-zig.config" "$tmp/etc/config/anytls-zig"
 cp "$here/config/anytls-zig.toml" "$tmp/etc/anytls-zig/config.toml.example"
+# Enabled out of the box: this is the symlink `service enable` would create,
+# so LuCI's System -> Startup shows the service as enabled right after install.
+ln -s ../init.d/anytls-zig "$tmp/etc/rc.d/S90anytls-zig"
 
 chmod 755 "$tmp/usr/bin/anytls-zig" "$tmp/etc/init.d/anytls-zig"
 chmod 600 "$tmp/etc/config/anytls-zig"

@@ -62,30 +62,56 @@ jobs:
             cpu: mips32r2
             match: "LSB executable, MIPS"
             abi: mips
+            optimize: ReleaseSmall
+            variant: ""
             owrt_arch: mipsel_24kc
           - name: mips-musleabi
             target: mips-linux-musleabi
             cpu: mips32r2
             match: "MSB executable, MIPS"
             abi: mips
+            optimize: ReleaseSmall
+            variant: ""
             owrt_arch: mips_24kc
           - name: armv7-musleabihf
             target: arm-linux-musleabihf
             cpu: cortex_a7-neon
             match: "ARM, EABI5"
             abi: ""
+            optimize: ReleaseSmall
+            variant: ""
             owrt_arch: arm_cortex-a7
           - name: aarch64-musl
             target: aarch64-linux-musl
             cpu: baseline
             match: "aarch64"
             abi: ""
+            optimize: ReleaseSmall
+            variant: ""
+            owrt_arch: aarch64_cortex-a53
+          - name: aarch64-aes
+            target: aarch64-linux-musl
+            cpu: baseline+aes+sha2
+            match: "aarch64"
+            abi: ""
+            optimize: ReleaseSmall
+            variant: -aes
+            owrt_arch: aarch64_cortex-a53
+          - name: aarch64-fast
+            target: aarch64-linux-musl
+            cpu: baseline+aes+sha2
+            match: "aarch64"
+            abi: ""
+            optimize: ReleaseFast
+            variant: -fast
             owrt_arch: aarch64_cortex-a53
           - name: x86_64-musl
             target: x86_64-linux-musl
             cpu: baseline
             match: "x86-64"
             abi: ""
+            optimize: ReleaseSmall
+            variant: ""
             owrt_arch: x86_64
     steps:
       - uses: actions/checkout@v4
@@ -130,7 +156,7 @@ jobs:
 
       - name: Build ${{ matrix.name }}
         run: |
-          zig build -Doptimize=ReleaseSmall \
+          zig build -Doptimize=${{ matrix.optimize }} \
             -Dtarget=${{ matrix.target }} \
             -Dcpu=${{ matrix.cpu }} \
             --prefix "out/${{ matrix.name }}"
@@ -147,7 +173,7 @@ jobs:
         run: |
           sudo env "APK=$APK" scripts/make-apk.sh "out/anytls-zig-${{ matrix.name }}" \
             "${{ matrix.owrt_arch }}" "${{ steps.ver.outputs.apk }}" \
-            "out/anytls-zig_${{ steps.ver.outputs.apk }}_${{ matrix.owrt_arch }}.apk"
+            "out/anytls-zig_${{ steps.ver.outputs.apk }}_${{ matrix.owrt_arch }}${{ matrix.variant }}.apk"
           "$APK" adbdump out/anytls-zig_*.apk | grep -q "name: anytls-zig"
           "$APK" adbdump out/anytls-zig_*.apk | grep -q "arch: ${{ matrix.owrt_arch }}"
           ls -l out/*.apk

@@ -109,9 +109,15 @@ readelf -h -l zig-out/bin/anytls-zig   # 无 INTERP、无 NEEDED
 * 32 位 ARM 构建面向 ARMv7-A + VFPv4，关闭 NEON（`-Dcpu=cortex_a7-neon`），可运行在
   任意 ARMv7 硬浮点目标上；打包时同时生成 `arm_cortex-a7` 和
   `arm_cortex-a7_neon-vfpv4` 两个标签。
-* 带 ARMv8 加密扩展的 ARM64 可加 `-Dcpu=baseline+aes+sha2`（吞吐约 1.5 倍）和/或
-  `-Doptimize=ReleaseFast`（约 3.5 倍，体积翻倍）。实测数据与取舍见
-  [docs/bench-aarch64.md](docs/bench-aarch64.md)。
+* CI 会为 aarch64 同时产出三个版本（包名相同，按需选一个）：
+
+  | 文件名后缀 | 构建 | 体积 | 吞吐 |
+  |---|---|---:|---:|
+  | *（无）* | `ReleaseSmall`，通用 CPU | 372 KB | ~106 MB/s |
+  | `-aes` | `ReleaseSmall` + `aes+sha2` | 356 KB | ~160 MB/s |
+  | `-fast` | `ReleaseFast` + `aes+sha2` | 710 KB | ~376 MB/s |
+
+  实测方法见 [docs/bench-aarch64.md](docs/bench-aarch64.md)。
 * `scripts/make-apk.sh` 可把已构建的二进制打成 OpenWrt apk；CI 会为所有目标生成。
 * `scripts/make-luci-apk.sh` 生成与架构无关的 `luci-app-anytls-zig` apk，并在打包时
   把 `po/zh_Hans` 编译成 `.lmo`（与 LuCI 官方 `po2lmo` 输出逐字节一致）。
@@ -213,13 +219,15 @@ uci commit anytls-zig
 chmod 600 /etc/config/anytls-zig
 ```
 
-4. 启动服务：
+4. 包里已带 `rc.d` 软链接，安装后服务即处于启用状态（LuCI 的
+   **系统 → 启动项** 会显示为启用）。直接启动：
 
 ```sh
-/etc/init.d/anytls-zig enable
 /etc/init.d/anytls-zig start
 logread -e anytls-zig
 ```
+
+   如需禁用：`/etc/init.d/anytls-zig disable`，或在启动项页面关闭。
 
 5. 让局域网客户端指向 `192.168.1.1:1080`（SOCKS5），或把它作为透明代理工具的
    上游。默认的 `127.0.0.1:1080` 只监听回环地址。
@@ -298,7 +306,7 @@ RSS、2 个线程；10 个并发会话加 10 个活跃 stream 时约 2.9 MB（�
 | 同端口重复启动 | `AddressInUse`（不会因 SO_REUSEPORT 静默共享端口） |
 | 日志凭据泄漏 | 所有日志中均无密码 |
 | 交叉编译 `mipsel-linux-musleabi` / `mips-linux-musleabi` / `arm-linux-musleabihf` / `aarch64-linux-musl` / `x86_64-linux-musl` | ELF32 LSB/MSB MIPS32r2 o32 软浮点、ARM EABI5 硬浮点、ELF64 aarch64/x86-64，均为静态链接且无动态段 |
-| OpenWrt apk（`scripts/make-apk.sh`） | ADB v3；用 apk-tools 3.0.8 安装到 chroot 验证，权限与依赖正确，覆盖 5 个目标 / 6 个包 |
+| OpenWrt apk（`scripts/make-apk.sh`） | ADB v3；用 apk-tools 3.0.8 安装到 chroot 验证，权限与依赖正确，覆盖 7 个构建变体 / 8 个包 |
 | LuCI apk（`scripts/make-luci-apk.sh`） | ADB v3、`noarch`，可随 `luci-base` + `anytls-zig` 安装；`.lmo` 与官方 `po2lmo` 输出逐字节一致 |
 | aarch64 吞吐 / 延迟 / CPU / RSS | [docs/bench-aarch64.md](docs/bench-aarch64.md)：106–376 MB/s、0.21–0.23 ms、1.3–1.7 MB RSS |
 

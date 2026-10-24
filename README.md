@@ -120,9 +120,15 @@ Notes:
 * The 32-bit ARM build targets ARMv7-A with VFPv4 but without NEON
   (`-Dcpu=cortex_a7-neon`), so it runs on any ARMv7 hard-float target. It is
   packaged under both `arm_cortex-a7` and `arm_cortex-a7_neon-vfpv4`.
-* ARM64 with the ARMv8 crypto extensions can use `-Dcpu=baseline+aes+sha2`
-  (1.5× throughput) and/or `-Doptimize=ReleaseFast` (3.5×, at twice the size).
-  Numbers and trade-offs: [docs/bench-aarch64.md](docs/bench-aarch64.md).
+* CI publishes three aarch64 builds (same package name, pick one):
+
+  | File suffix | Build | Size | Throughput |
+  |---|---|---:|---:|
+  | *(none)* | `ReleaseSmall`, generic CPU | 372 KB | ~106 MB/s |
+  | `-aes` | `ReleaseSmall`, `+aes+sha2` | 356 KB | ~160 MB/s |
+  | `-fast` | `ReleaseFast`, `+aes+sha2` | 710 KB | ~376 MB/s |
+
+  Measurements: [docs/bench-aarch64.md](docs/bench-aarch64.md).
 * `scripts/make-apk.sh` wraps a built binary into an OpenWrt apk; the CI
   workflow builds apks for all targets.
 * `scripts/make-luci-apk.sh` builds the arch-independent `luci-app-anytls-zig`
@@ -228,13 +234,15 @@ uci commit anytls-zig
 chmod 600 /etc/config/anytls-zig
 ```
 
-4. Start the service:
+4. The package ships the `rc.d` symlink, so the service is enabled at install
+   (LuCI **System → Startup** shows it as enabled). Start it now:
 
 ```sh
-/etc/init.d/anytls-zig enable
 /etc/init.d/anytls-zig start
 logread -e anytls-zig
 ```
+
+   Disable with `/etc/init.d/anytls-zig disable` or from the Startup page.
 
 5. Point LAN clients at `192.168.1.1:1080` (SOCKS5), or use it as an upstream
    for a transparent-proxy tool. The default `127.0.0.1:1080` is loopback only.
@@ -319,7 +327,7 @@ a locally generated CA and a `localhost` certificate, and a local HTTP origin.
 | Duplicate instance on same port | `AddressInUse` (no silent SO_REUSEPORT sharing) |
 | Credential leakage in logs | password absent from all logs |
 | Cross-compile `mipsel-linux-musleabi` / `mips-linux-musleabi` / `arm-linux-musleabihf` / `aarch64-linux-musl` / `x86_64-linux-musl` | ELF32 LSB/MSB MIPS32r2 o32 soft-float, ARM EABI5 hard-float, ELF64 aarch64/x86-64; all static with no dynamic section |
-| OpenWrt apk (`scripts/make-apk.sh`) | ADB v3; installed with apk-tools 3.0.8 into a chroot, correct modes and dependency, 5 targets / 6 packages |
+| OpenWrt apk (`scripts/make-apk.sh`) | ADB v3; installed with apk-tools 3.0.8 into a chroot, correct modes/dependency, 7 build variants / 8 packages |
 | LuCI apk (`scripts/make-luci-apk.sh`) | ADB v3, `noarch`, installs with `luci-base` + `anytls-zig`; `.lmo` byte-identical to LuCI `po2lmo` |
 | aarch64 throughput / latency / CPU / RSS | [docs/bench-aarch64.md](docs/bench-aarch64.md): 106–376 MB/s, 0.21–0.23 ms, 1.3–1.7 MB RSS |
 

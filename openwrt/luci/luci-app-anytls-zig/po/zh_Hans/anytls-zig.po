@@ -21,12 +21,6 @@ msgstr "AnyTLS（协议 v2）客户端，提供 SOCKS5 本地入口，使用 TLS
 msgid "Settings"
 msgstr "设置"
 
-msgid "Enable"
-msgstr "启用"
-
-msgid "Start the client automatically when the system boots."
-msgstr "系统启动时自动运行客户端。"
-
 msgid "SOCKS5 listen address"
 msgstr "SOCKS5 监听地址"
 
