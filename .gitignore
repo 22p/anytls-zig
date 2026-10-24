@@ -1,0 +1,5 @@
+.zig-cache/
+zig-out/
+dist/
+__pycache__/
+*.pyc

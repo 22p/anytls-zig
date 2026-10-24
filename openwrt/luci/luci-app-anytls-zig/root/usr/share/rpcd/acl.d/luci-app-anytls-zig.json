@@ -1,0 +1,11 @@
+{
+	"luci-app-anytls-zig": {
+		"description": "Grant access to AnyTLS Zig configuration",
+		"read": {
+			"uci": [ "anytls-zig" ]
+		},
+		"write": {
+			"uci": [ "anytls-zig" ]
+		}
+	}
+}

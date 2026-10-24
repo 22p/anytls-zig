@@ -1,0 +1,23 @@
+# anytls-zig configuration file.
+# Start the client with:  anytls-zig -c /etc/anytls-zig/config.toml
+# Command-line options override values from this file.
+
+[listen]
+address = "127.0.0.1:1080"
+
+[server]
+address = "example.com:443"
+sni = "example.com"
+password = "change-me"         # or set ANYTLS_PASSWORD in the environment
+ca = "/etc/ssl/certs/ca-certificates.crt"
+insecure = false
+connect_timeout = 10           # seconds
+
+[session]
+min_idle = 5                   # warm idle sessions (0..64)
+idle_timeout = 30              # seconds (5..86400)
+max_streams = 128              # per session (1..4096)
+half_close_wait = 3            # seconds (0..3600)
+
+[log]
+level = "info"                 # error | warn | info | debug

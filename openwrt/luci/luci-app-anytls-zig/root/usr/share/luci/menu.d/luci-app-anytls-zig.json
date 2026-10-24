@@ -1,0 +1,13 @@
+{
+	"admin/services/anytls-zig": {
+		"title": "AnyTLS Zig",
+		"order": 60,
+		"action": {
+			"type": "view",
+			"path": "anytls-zig/settings"
+		},
+		"depends": {
+			"acl": [ "luci-app-anytls-zig" ]
+		}
+	}
+}
