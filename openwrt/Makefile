@@ -73,6 +73,10 @@ define Package/anytls-zig/install
 	$(INSTALL_BIN) ./files/anytls-zig.init $(1)/etc/init.d/anytls-zig
 	$(INSTALL_DIR) $(1)/etc/anytls-zig
 	$(INSTALL_CONF) ./config/anytls-zig.toml $(1)/etc/anytls-zig/config.toml.example
+	$(INSTALL_DIR) $(1)/usr/libexec/anytls-zig
+	$(INSTALL_BIN) ./files/anytls-zig-pac $(1)/usr/libexec/anytls-zig/pac
+	$(INSTALL_DIR) $(1)/usr/share/anytls-zig
+	$(INSTALL_DATA) ./files/china-domains.txt $(1)/usr/share/anytls-zig/china-domains.txt
 endef
 
 $(eval $(call BuildPackage,anytls-zig))

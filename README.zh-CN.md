@@ -253,8 +253,31 @@ CI 会生成 `luci-app-anytls-zig_<version>_noarch.apk`；翻译在打包时编�
 语言代码（`zh-cn`）查找词条，所以文件名不是 `zh_Hans.lmo`。
 
 表单覆盖监听地址、服务器/SNI、密码、CA 证书、校验开关、超时、会话池、stream
-上限和日志级别。密码保存在 `/etc/config/anytls-zig`，请把该文件权限设为 600。
-`scripts/check-luci-i18n.py` 会检查每条界面字符串都有翻译。
+上限、PAC 选项和日志级别。密码保存在 `/etc/config/anytls-zig`，请把该文件权限
+设为 600。`scripts/check-luci-i18n.py` 会检查每条界面字符串都有翻译。
+
+### PAC 文件
+
+打开 `pac_enabled` 后服务会生成 `/www/anytls-zig.pac`，uhttpd 通过
+`http://<LAN-IP>/anytls-zig.pac` 提供。代理地址由 LAN 地址和 `listen` 里的
+SOCKS5 端口自动生成；要让局域网设备使用，请把 `listen` 设为 `0.0.0.0:1080`
+（监听地址是具体 IP 时直接使用该 IP）。URL 同时写入
+`/tmp/anytls-zig.pac.url`。
+
+本地/私网地址和 `/usr/share/anytls-zig/china-domains.txt` 中的域名走直连
+（内置常见中国站点，可自行编辑），`pac_bypass` 列表中的域名同样直连；其余流量
+走 SOCKS5 代理，并以 DIRECT 作为回退。服务启动/重载时重新生成。
+
+```sh
+uci set anytls-zig.main.listen='0.0.0.0:1080'
+uci set anytls-zig.main.pac_enabled='1'
+uci add_list anytls-zig.main.pac_bypass='example.cn'
+uci commit anytls-zig
+/etc/init.d/anytls-zig restart
+```
+
+内置列表只是常见站点样本，不是完整的中国域名列表；每行一个后缀。直接修改
+安装目录里的文件可能在升级时被覆盖，长期追加请用 `pac_bypass`。
 
 ## 体积
 
@@ -292,7 +315,7 @@ RSS、2 个线程；10 个并发会话加 10 个活跃 stream 时约 2.9 MB（�
 |---|---|
 | 单元测试：帧编解码、SOCKS 地址编码、UDP/UoT 组帧、默认方案 MD5（`75cff2ad…`）、填充解析与尺寸生成、settings、有界管道、TOML 解析、配置优先级、随附示例配置 | 18/18 通过 |
 | TOML 配置端到端：仅用配置文件启动、命令行覆盖、TOML 中的密码、重复键/未知键/类型/表头错误诊断 | 通过 |
-| LuCI 翻译覆盖（`scripts/check-luci-i18n.py`） | 31/31 条已翻译 |
+| LuCI 翻译覆盖（`scripts/check-luci-i18n.py`） | 35/35 条已翻译 |
 | TLS 1.3 + 证书链 + SNI | 协商为 `tls_1_3`；错误 SNI 报 `CertificateHostMismatch` |
 | SOCKS5 CONNECT，IPv4 目标 | 200 / 内容正确 |
 | SOCKS5 UDP ASSOCIATE（UoT v2）：经 `1.1.1.1:53` 的 DNS、16 KiB 回显、同一关联内两个目标 | 响应正确，16 KiB 数据完整，超限数据报被丢弃且不破坏关联 |

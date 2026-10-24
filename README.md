@@ -274,9 +274,36 @@ extra i18n package is needed. LuCI finds catalogs by the runtime language code
 (`zh-cn`), which is why the file is not named `zh_Hans.lmo`.
 
 The form covers the listen address, server/SNI, password, CA bundle,
-verification switch, timeouts, pool sizes, stream limit and log level. The
-password is stored in `/etc/config/anytls-zig`; keep that file mode 600.
-`scripts/check-luci-i18n.py` verifies that every UI string has a translation.
+verification switch, timeouts, pool sizes, stream limit, PAC options and log
+level. The password is stored in `/etc/config/anytls-zig`; keep that file mode
+600. `scripts/check-luci-i18n.py` verifies that every UI string has a
+translation.
+
+### PAC file
+
+Enable `pac_enabled` and the service generates `/www/anytls-zig.pac`, served by
+uhttpd at `http://<LAN-IP>/anytls-zig.pac`. The proxy line is built from the LAN
+address and the SOCKS5 port in `listen`; set `listen` to `0.0.0.0:1080` so LAN
+clients can reach it (a concrete listen host is used verbatim). The URL is also
+written to `/tmp/anytls-zig.pac.url`.
+
+Local/private hosts and the domains in
+`/usr/share/anytls-zig/china-domains.txt` go DIRECT (a curated list of common
+Chinese sites, editable), plus anything in the `pac_bypass` list; everything
+else uses the SOCKS5 proxy with a DIRECT fallback. The file is regenerated on
+service start/reload.
+
+```sh
+uci set anytls-zig.main.listen='0.0.0.0:1080'
+uci set anytls-zig.main.pac_enabled='1'
+uci add_list anytls-zig.main.pac_bypass='example.cn'
+uci commit anytls-zig
+/etc/init.d/anytls-zig restart
+```
+
+The built-in list is a sample rather than a complete China list; one suffix per
+line. Edits to the installed file may be overwritten by package upgrades, so put
+permanent additions in `pac_bypass`.
 
 ## Size
 
@@ -315,7 +342,7 @@ a locally generated CA and a `localhost` certificate, and a local HTTP origin.
 |---|---|
 | Unit tests: frame codec, SOCKS address encoding, UDP/UoT framing, default scheme MD5 (`75cff2ad…`), padding parsing/size generation, settings, bounded pipe, TOML parser, option precedence, shipped example config | 18/18 pass |
 | TOML config end-to-end: config-only startup, CLI override, password in TOML, duplicate key/unknown key/type/table diagnostics | pass |
-| LuCI catalog coverage (`scripts/check-luci-i18n.py`) | 31/31 strings translated |
+| LuCI catalog coverage (`scripts/check-luci-i18n.py`) | 35/35 strings translated |
 | TLS 1.3 + chain + SNI | `tls_1_3` negotiated; `CertificateHostMismatch` with wrong SNI |
 | SOCKS5 CONNECT, IPv4 target | 200 / correct body |
 | SOCKS5 UDP ASSOCIATE (UoT v2): DNS via `1.1.1.1:53`, 16 KiB echo, two destinations on one association | correct responses, 16 KiB payload intact, oversized datagrams dropped without killing the association |

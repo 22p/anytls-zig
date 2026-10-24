@@ -24,6 +24,16 @@ return view.extend({
 		o.default = '127.0.0.1:1080';
 		o.description = _('Use 0.0.0.0:1080 to serve the LAN; the default listens on loopback only.');
 
+		o = s.option(form.Flag, 'pac_enabled', _('Serve PAC file'),
+			_('Writes /www/anytls-zig.pac, served as http://<LAN-IP>/anytls-zig.pac. The proxy address is generated from the LAN address and the SOCKS5 port above, so set listen to 0.0.0.0:1080 for LAN clients.'));
+		o.default = '0';
+		o.rmempty = false;
+
+		o = s.option(form.DynamicList, 'pac_bypass', _('PAC bypass domains'),
+			_('Extra domains that should go DIRECT, subdomains included. The built-in list already covers common Chinese sites.'));
+		o.datatype = 'hostname';
+		o.placeholder = 'example.cn';
+
 		o = s.option(form.Value, 'server', _('Server address'));
 		o.datatype = 'hostport';
 		o.placeholder = 'example.com:443';

@@ -105,3 +105,14 @@ msgstr ""
 msgid "Debug"
 msgstr ""
 
+msgid "Serve PAC file"
+msgstr ""
+
+msgid "Writes /www/anytls-zig.pac, served as http://<LAN-IP>/anytls-zig.pac. The proxy address is generated from the LAN address and the SOCKS5 port above, so set listen to 0.0.0.0:1080 for LAN clients."
+msgstr ""
+
+msgid "PAC bypass domains"
+msgstr ""
+
+msgid "Extra domains that should go DIRECT, subdomains included. The built-in list already covers common Chinese sites."
+msgstr ""
