@@ -219,15 +219,13 @@ uci commit anytls-zig
 chmod 600 /etc/config/anytls-zig
 ```
 
-4. 包里已带 `rc.d` 软链接，安装后服务即处于启用状态（LuCI 的
-   **系统 → 启动项** 会显示为启用）。直接启动：
+4. 启动服务：
 
 ```sh
+/etc/init.d/anytls-zig enable
 /etc/init.d/anytls-zig start
 logread -e anytls-zig
 ```
-
-   如需禁用：`/etc/init.d/anytls-zig disable`，或在启动项页面关闭。
 
 5. 让局域网客户端指向 `192.168.1.1:1080`（SOCKS5），或把它作为透明代理工具的
    上游。默认的 `127.0.0.1:1080` 只监听回环地址。

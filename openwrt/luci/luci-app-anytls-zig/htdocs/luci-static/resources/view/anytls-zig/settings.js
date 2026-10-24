@@ -13,6 +13,11 @@ return view.extend({
 		s.anonymous = true;
 		s.addremove = false;
 
+		o = s.option(form.Flag, 'enabled', _('Enable'));
+		o.default = '0';
+		o.rmempty = false;
+		o.description = _('Start the client automatically when the system boots.');
+
 		o = s.option(form.Value, 'listen', _('SOCKS5 listen address'));
 		o.datatype = 'hostport';
 		o.placeholder = '127.0.0.1:1080';

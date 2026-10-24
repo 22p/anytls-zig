@@ -234,15 +234,13 @@ uci commit anytls-zig
 chmod 600 /etc/config/anytls-zig
 ```
 
-4. The package ships the `rc.d` symlink, so the service is enabled at install
-   (LuCI **System → Startup** shows it as enabled). Start it now:
+4. Start the service:
 
 ```sh
+/etc/init.d/anytls-zig enable
 /etc/init.d/anytls-zig start
 logread -e anytls-zig
 ```
-
-   Disable with `/etc/init.d/anytls-zig disable` or from the Startup page.
 
 5. Point LAN clients at `192.168.1.1:1080` (SOCKS5), or use it as an upstream
    for a transparent-proxy tool. The default `127.0.0.1:1080` is loopback only.

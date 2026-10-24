@@ -71,8 +71,6 @@ define Package/anytls-zig/install
 	$(INSTALL_CONF) ./files/anytls-zig.config $(1)/etc/config/anytls-zig
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/anytls-zig.init $(1)/etc/init.d/anytls-zig
-	$(INSTALL_DIR) $(1)/etc/rc.d
-	$(LN) ../init.d/anytls-zig $(1)/etc/rc.d/S90anytls-zig
 	$(INSTALL_DIR) $(1)/etc/anytls-zig
 	$(INSTALL_CONF) ./config/anytls-zig.toml $(1)/etc/anytls-zig/config.toml.example
 endef

@@ -72,6 +72,7 @@ pub const Conn = struct {
         });
 
         setSocketTimeout(fd, 0);
+        log.debug("tls: cipher {s}", .{@tagName(std.meta.activeTag(self.client.application_cipher))});
         log.debug("tls: negotiated {s} with {s}", .{
             @tagName(self.client.tls_version), sni,
         });
