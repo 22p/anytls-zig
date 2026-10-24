@@ -200,7 +200,7 @@ jobs:
           sudo env "APK=$APK" scripts/make-apk.sh "out/anytls-zig-${{ matrix.name }}" \
             arm_cortex-a7_neon-vfpv4 "${{ steps.ver.outputs.apk }}" \
             "out/anytls-zig_${{ steps.ver.outputs.apk }}_arm_cortex-a7_neon-vfpv4${{ matrix.variant }}.apk"
-          "$APK" adbdump out/anytls-zig_*_arm_cortex-a7_neon-vfpv4.apk | grep -q "name: anytls-zig"
+          "$APK" adbdump out/anytls-zig_*_arm_cortex-a7_neon-vfpv4${{ matrix.variant }}.apk | grep -q "name: anytls-zig"
           ls -l out/*.apk
 
       - uses: actions/upload-artifact@v4
@@ -253,7 +253,7 @@ jobs:
           sudo env "APK=$APK" scripts/make-apk.sh "out/anytls-zig-${{ matrix.name }}" \
             arm_cortex-a7_neon-vfpv4 "${{ steps.ver.outputs.apk }}" \
             "out/anytls-zig_${{ steps.ver.outputs.apk }}_arm_cortex-a7_neon-vfpv4.apk"
-          "$APK" adbdump out/anytls-zig_*_arm_cortex-a7_neon-vfpv4.apk | grep -q "name: anytls-zig"
+          "$APK" adbdump out/anytls-zig_*_arm_cortex-a7_neon-vfpv4${{ matrix.variant }}.apk | grep -q "name: anytls-zig"
           ls -l out/*.apk
 
       - uses: actions/upload-artifact@v4
