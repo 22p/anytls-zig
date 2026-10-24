@@ -10,8 +10,8 @@ cost (CPU, latency, memory) and the `ReleaseSmall` size/speed trade-off, not to
 predict WAN throughput.
 
 These numbers are from the Zig **0.17.0** port (see *Toolchain comparison* for
-what changed against 0.15.1). CI ships only the `ReleaseFast` build of each
-architecture, and the x86-64 artifact is built with
+what changed against 0.15.1). CI ships both `ReleaseSmall` and `ReleaseFast`
+for aarch64/armv7/MIPS and only `ReleaseFast` for x86-64, built with
 `-Dcpu=baseline+aes+pclmul+avx` (AES-NI + PCLMULQDQ + AVX, i.e. 2011 or newer);
 the other two rows are kept here as measurement history.
 

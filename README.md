@@ -124,13 +124,13 @@ Notes:
 * The 32-bit ARM build targets ARMv7-A with VFPv4 but without NEON
   (`-Dcpu=cortex_a7-neon`), so it runs on any ARMv7 hard-float target. It is
   packaged under both `arm_cortex-a7` and `arm_cortex-a7_neon-vfpv4`.
-* CI publishes exactly one **`ReleaseFast`** binary per architecture (no
-  `-aes`/`-fast` variants). Zig 0.17's `ReleaseSmall` crypto codegen is about
-  twice as slow for AES-GCM, so the small builds are no longer shipped; the
-  trade-off is size (MIPS32 ~2.1 MB, ARMv7 ~1.3 MB, aarch64 ~0.87 MB,
-  x86-64 ~1.00 MB). aarch64 is built with `+aes+sha2`, x86-64 with
-  `+aes+pclmul+avx` (requires AES-NI, PCLMULQDQ and AVX — roughly 2011 or newer;
-  a `baseline` build is ~2x slower). Measurements:
+* CI publishes `ReleaseSmall` (no suffix) and `ReleaseFast` (`-fast`) for
+  aarch64, armv7 and MIPS, and only `ReleaseFast` for x86-64. 0.17.0 sizes:
+  aarch64 472 KB / 869 KB, armv7 697 KB / 1.33 MB, mips 1.08 MB / 2.13 MB,
+  x86-64 – / 1.06 MB. Zig 0.17's `ReleaseSmall` crypto codegen is about twice
+  as slow for AES-GCM, so prefer the fast build where flash allows it. aarch64
+  fast uses `+aes+sha2`; x86-64 uses `+aes+pclmul+avx` (requires AES-NI,
+  PCLMULQDQ and AVX — roughly 2011 or newer). Measurements:
   [docs/bench-x86_64.md](docs/bench-x86_64.md) (0.17.0) and
   [docs/bench-aarch64.md](docs/bench-aarch64.md) (0.15.1).
 * `scripts/make-apk.sh` wraps a built binary into an OpenWrt apk; the CI

@@ -111,13 +111,13 @@ readelf -h -l zig-out/bin/anytls-zig   # 无 INTERP、无 NEEDED
 * 32 位 ARM 构建面向 ARMv7-A + VFPv4，关闭 NEON（`-Dcpu=cortex_a7-neon`），可运行在
   任意 ARMv7 硬浮点目标上；打包时同时生成 `arm_cortex-a7` 和
   `arm_cortex-a7_neon-vfpv4` 两个标签。
-* CI 每种架构只发布一个 **`ReleaseFast`** 二进制（不再有 `-aes`/`-fast` 变体）。
-  Zig 0.17 的 `ReleaseSmall` 加密代码生成会让 AES-GCM 慢约一倍，因此不再发布小体积
-  构建；代价是体积（MIPS32 约 2.1 MB、ARMv7 约 1.3 MB、aarch64 约 0.87 MB、
-  x86-64 约 1.00 MB）。aarch64 使用 `+aes+sha2`，x86-64 使用
-  `+aes+pclmul+avx`（要求 AES-NI、PCLMULQDQ、AVX，约 2011 年后的 CPU；用
-  `baseline` 会慢约一倍）。实测见
-  [docs/bench-x86_64.md](docs/bench-x86_64.md)（0.17.0）与
+* CI 为 aarch64、armv7 和 MIPS 同时发布 `ReleaseSmall`（无后缀）与
+  `ReleaseFast`（`-fast`），x86-64 只发布 `ReleaseFast`。0.17.0 体积：
+  aarch64 472 KB / 869 KB、armv7 697 KB / 1.33 MB、mips 1.08 MB / 2.13 MB、
+  x86-64 – / 1.06 MB。Zig 0.17 的 `ReleaseSmall` 加密代码生成会让 AES-GCM
+  慢约一倍，flash 允许时优先用 fast。aarch64 fast 使用 `+aes+sha2`，x86-64
+  使用 `+aes+pclmul+avx`（要求 AES-NI、PCLMULQDQ、AVX，约 2011 年后的 CPU）。
+  实测见 [docs/bench-x86_64.md](docs/bench-x86_64.md)（0.17.0）与
   [docs/bench-aarch64.md](docs/bench-aarch64.md)（0.15.1）。
 * `scripts/make-apk.sh` 可把已构建的二进制打成 OpenWrt apk；CI 会为所有目标生成。
 * `scripts/make-luci-apk.sh` 生成与架构无关的 `luci-app-anytls-zig` apk，并在打包时

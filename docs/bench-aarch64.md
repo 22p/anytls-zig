@@ -1,10 +1,10 @@
 # aarch64 performance
 
-> **Superseded.** CI now publishes a single `ReleaseFast` binary per
-> architecture. The three variants below were measured with Zig 0.15.1; under
-> 0.17.0 the `ReleaseSmall` crypto path is roughly twice as slow (see
-> [bench-x86_64.md](bench-x86_64.md)), which is why the small variants were
-> dropped.
+> **Historical.** CI now publishes `ReleaseSmall` and `ReleaseFast` per
+> architecture (`ReleaseFast` only on x86-64), so the `-aes` middle variant is
+> gone. The measurements below were taken with Zig 0.15.1; under 0.17.0 the
+> `ReleaseSmall` crypto path is roughly twice as slow (see
+> [bench-x86_64.md](bench-x86_64.md)).
 
 Three aarch64 builds were compared from the same source: `ReleaseSmall`
 (generic), `ReleaseSmall` with `+aes+sha2`, and `ReleaseFast` with `+aes+sha2`.
