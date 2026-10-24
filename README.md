@@ -101,6 +101,7 @@ Static cross-build:
 ```sh
 zig build -Doptimize=ReleaseSmall -Dtarget=aarch64-linux-musl
 zig build -Doptimize=ReleaseSmall -Dtarget=arm-linux-musleabihf -Dcpu=cortex_a7
+zig build -Doptimize=ReleaseSmall -Dtarget=arm-linux-musleabi -Dcpu=arm926ej_s
 zig build -Doptimize=ReleaseSmall -Dtarget=mipsel-linux-musleabi -Dcpu=mips32r2
 
 file zig-out/bin/anytls-zig
@@ -117,6 +118,11 @@ Notes:
   several minutes on a small host; later builds are cached.
 * Equivalent direct command:
   `zig build-exe src/main.zig -lc -OReleaseSmall -target <triple> -fstrip`
+* ARMv5 (`armel`, e.g. ARM926) has no LDREX/STREX. The build supplies the
+  `__sync_*` atomics through the kernel's `__kuser_cmpxchg` helper
+  (`src/armv5_atomic.zig`), the same mechanism libgcc uses; OpenWrt ARMv5
+  kernels keep `CONFIG_KUSER_HELPERS` enabled. This build is exercised under
+  qemu-arm (SOCKS, TLS 1.3, 10 MB transfer, concurrency).
 * ARM64 with the ARMv8 crypto extensions can use `-Dcpu=baseline+aes+sha2`
   (1.5× throughput) and/or `-Doptimize=ReleaseFast` (3.5×, at twice the size).
   Numbers and trade-offs: [docs/bench-aarch64.md](docs/bench-aarch64.md).
@@ -308,7 +314,8 @@ a locally generated CA and a `localhost` certificate, and a local HTTP origin.
 | Half-close (client `shutdown(WR)` after upload) | bounded teardown after grace; same result as the reference Go client |
 | Duplicate instance on same port | `AddressInUse` (no silent SO_REUSEPORT sharing) |
 | Credential leakage in logs | password absent from all logs |
-| Cross-compile `mipsel-linux-musleabi` / `mips-linux-musleabi` / `arm-linux-musleabihf` / `aarch64-linux-musl` / `x86_64-linux-musl` | ELF32 LSB/MSB MIPS32r2 o32 soft-float, ARM EABI5 hard-float, ELF64 aarch64/x86-64; all static with no dynamic section |
+| Cross-compile `mipsel-linux-musleabi` / `mips-linux-musleabi` / `arm-linux-musleabihf` / `arm-linux-musleabi` / `aarch64-linux-musl` / `x86_64-linux-musl` | ELF32 LSB/MSB MIPS32r2 o32 soft-float, ARM EABI5 hard-float and ARMv5TE soft-float, ELF64 aarch64/x86-64; all static with no dynamic section |
+| armel (ARMv5TE) runtime | SOCKS5 + TLS 1.3 + 10 MB checksum + 4-way concurrency under qemu-arm |
 | OpenWrt apk (`scripts/make-apk.sh`) | ADB v3; installed with apk-tools 3.0.8 into a chroot, correct modes and dependency, 5 architectures |
 | LuCI apk (`scripts/make-luci-apk.sh`) | ADB v3, `noarch`, installs with `luci-base` + `anytls-zig`; `.lmo` byte-identical to LuCI `po2lmo` |
 | aarch64 throughput / latency / CPU / RSS | [docs/bench-aarch64.md](docs/bench-aarch64.md): 106–376 MB/s, 0.21–0.23 ms, 1.3–1.7 MB RSS |

@@ -2,6 +2,7 @@
 //! SOCKS5 inbound -> AnyTLS stream -> TLS 1.3 -> remote server.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const posix = std.posix;
 const net = std.net;
 const anytls = @import("anytls.zig");
@@ -12,10 +13,20 @@ const log = @import("log.zig");
 
 const version = "0.1.0";
 
-var stop_flag = std.atomic.Value(bool).init(false);
+comptime {
+    // ARMv5 (armel) has no LDREX/STREX; provide the libgcc-style helpers.
+    // ARMv6+ lowers atomics inline, so the shim is not linked there.
+    if (builtin.cpu.arch == .arm and
+        !builtin.cpu.features.isEnabled(@intFromEnum(std.Target.arm.Feature.v6)))
+    {
+        _ = @import("armv5_atomic.zig");
+    }
+}
+
+var stop_flag = std.atomic.Value(u32).init(0);
 
 fn onSignal(_: c_int) callconv(.c) void {
-    stop_flag.store(true, .release);
+    stop_flag.store(1, .release);
 }
 
 fn installSignalHandlers() void {
@@ -185,7 +196,7 @@ pub fn main() void {
         if (cfg.insecure) "off" else "on",
     });
 
-    while (!stop_flag.load(.acquire)) {
+    while (stop_flag.load(.acquire) == 0) {
         var fds = [_]posix.pollfd{.{
             .fd = listen_fd,
             .events = posix.POLL.IN,
@@ -195,7 +206,7 @@ pub fn main() void {
         if (fds[0].revents == 0) continue;
 
         const fd = posix.accept(listen_fd, null, null, posix.SOCK.CLOEXEC) catch |e| {
-            if (stop_flag.load(.acquire)) break;
+            if (stop_flag.load(.acquire) != 0) break;
             log.warn("accept failed: {s}", .{@errorName(e)});
             continue;
         };

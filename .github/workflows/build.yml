@@ -62,30 +62,42 @@ jobs:
             cpu: mips32r2
             match: "LSB executable, MIPS"
             abi: mips
+            cpu_arch: ""
             owrt_arch: mipsel_24kc
           - name: mips-musleabi
             target: mips-linux-musleabi
             cpu: mips32r2
             match: "MSB executable, MIPS"
             abi: mips
+            cpu_arch: ""
             owrt_arch: mips_24kc
           - name: armv7-musleabihf
             target: arm-linux-musleabihf
             cpu: cortex_a7
             match: "ARM, EABI5"
             abi: ""
+            cpu_arch: ""
             owrt_arch: arm_cortex-a7_neon-vfpv4
+          - name: armel-musleabi
+            target: arm-linux-musleabi
+            cpu: arm926ej_s
+            match: "ARM, EABI5"
+            abi: ""
+            cpu_arch: v5TE
+            owrt_arch: arm_arm926ej-s
           - name: aarch64-musl
             target: aarch64-linux-musl
             cpu: baseline
             match: "aarch64"
             abi: ""
+            cpu_arch: ""
             owrt_arch: aarch64_cortex-a53
           - name: x86_64-musl
             target: x86_64-linux-musl
             cpu: baseline
             match: "x86-64"
             abi: ""
+            cpu_arch: ""
             owrt_arch: x86_64
     steps:
       - uses: actions/checkout@v4
@@ -140,7 +152,7 @@ jobs:
           cp "out/${{ matrix.name }}/bin/anytls-zig" "out/anytls-zig-${{ matrix.name }}"
           chmod +x "out/anytls-zig-${{ matrix.name }}"
           scripts/check-elf.sh "out/anytls-zig-${{ matrix.name }}" \
-            "${{ matrix.match }}" "${{ matrix.abi }}"
+            "${{ matrix.match }}" "${{ matrix.abi }}" "${{ matrix.cpu_arch }}"
           sha256sum "out/anytls-zig-${{ matrix.name }}"
 
       - name: Package OpenWrt apk

@@ -39,11 +39,11 @@ pub const Stream = struct {
     /// creator + session map (+ one per relay thread)
     refs: std.atomic.Value(u32),
     pipe: Pipe,
-    fin_sent: std.atomic.Value(bool),
-    closed: std.atomic.Value(bool),
+    fin_sent: std.atomic.Value(u32),
+    closed: std.atomic.Value(u32),
     in_map: bool = true, // guarded by session.streams_mutex
     /// 0 = awaiting SYNACK, 1 = ok, 2 = failed
-    synack: std.atomic.Value(u8),
+    synack: std.atomic.Value(u32),
     syn_deadline_ms: i64 = 0,
 
     fn create(session: *Session, id: u32) !*Stream {
@@ -55,9 +55,9 @@ pub const Stream = struct {
             .id = id,
             .refs = std.atomic.Value(u32).init(1),
             .pipe = try Pipe.init(alloc, stream_buffer_size),
-            .fin_sent = std.atomic.Value(bool).init(false),
-            .closed = std.atomic.Value(bool).init(false),
-            .synack = std.atomic.Value(u8).init(0),
+            .fin_sent = std.atomic.Value(u32).init(0),
+            .closed = std.atomic.Value(u32).init(0),
+            .synack = std.atomic.Value(u32).init(0),
         };
         session.acquire();
         return self;
@@ -96,7 +96,7 @@ pub const Stream = struct {
 
     /// Half close: tell the server this direction is done, keep reading.
     pub fn sendFin(self: *Stream) void {
-        if (self.fin_sent.swap(true, .acq_rel)) return;
+        if (self.fin_sent.swap(1, .acq_rel) != 0) return;
         self.session.writeControl(.fin, self.id, &.{}) catch |e| {
             log.debug("stream {d}: FIN write failed: {s}", .{ self.id, @errorName(e) });
             return;
@@ -106,8 +106,8 @@ pub const Stream = struct {
 
     /// Full teardown: FIN if not sent, drop from session map, wake consumer.
     pub fn closeNow(self: *Stream) void {
-        if (self.closed.swap(true, .acq_rel)) return;
-        if (!self.fin_sent.swap(true, .acq_rel)) {
+        if (self.closed.swap(1, .acq_rel) != 0) return;
+        if (self.fin_sent.swap(1, .acq_rel) == 0) {
             self.session.writeControl(.fin, self.id, &.{}) catch {};
         }
         if (self.session.removeStream(self.id)) |st| st.release();
@@ -125,7 +125,7 @@ const Session = struct {
     seq: u64,
     scheme: *const proto.Scheme,
     refs: std.atomic.Value(u32),
-    dead: std.atomic.Value(bool),
+    dead: std.atomic.Value(u32),
     write_mutex: std.Thread.Mutex = .{},
     open_mutex: std.Thread.Mutex = .{},
     streams_mutex: std.Thread.Mutex = .{},
@@ -134,11 +134,11 @@ const Session = struct {
     started: bool = false,
     pkt_counter: u32 = 0,
     send_padding: bool = true,
-    peer_version: std.atomic.Value(u8) = std.atomic.Value(u8).init(1),
+    peer_version: std.atomic.Value(u32) = std.atomic.Value(u32).init(1),
     read_buf: []u8,
     scratch: []u8,
     reader_thread: std.Thread = undefined,
-    in_pool: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+    in_pool: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
     active: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
 
     fn create(client: *Client, conn: *tlsm.Conn, seq: u64, scheme: *const proto.Scheme) !*Session {
@@ -156,7 +156,7 @@ const Session = struct {
             .seq = seq,
             .scheme = scheme,
             .refs = std.atomic.Value(u32).init(1),
-            .dead = std.atomic.Value(bool).init(false),
+            .dead = std.atomic.Value(u32).init(0),
             .read_buf = read_buf,
             .scratch = scratch,
         };
@@ -177,11 +177,11 @@ const Session = struct {
     }
 
     fn isDead(self: *Session) bool {
-        return self.dead.load(.acquire);
+        return self.dead.load(.acquire) != 0;
     }
 
     fn close(self: *Session) void {
-        if (self.dead.swap(true, .acq_rel)) return;
+        if (self.dead.swap(1, .acq_rel) != 0) return;
         self.acquire();
         defer self.release();
         self.client.removeIdle(self);
@@ -470,7 +470,7 @@ const Session = struct {
                         self.conn.readExact(buf[0..n]) catch return;
                         if (len > n) self.discard(len - n) catch return;
                         if (proto.parseKVInt(buf[0..n], "v")) |v| {
-                            const pv: u8 = @intCast(@min(v, 255));
+                            const pv: u32 = @min(v, 255);
                             self.peer_version.store(pv, .release);
                             log.debug("session {d}: peer version {d}", .{ self.seq, pv });
                         }
@@ -527,7 +527,7 @@ pub const Client = struct {
     seq_counter: u64 = 0,
     seq_mutex: std.Thread.Mutex = .{},
     handshake_mutex: std.Thread.Mutex = .{},
-    stop_flag: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+    stop_flag: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
     janitor_thread: ?std.Thread = null,
 
     pub fn init(alloc: Allocator, cfg: Config) !*Client {
@@ -680,7 +680,7 @@ pub const Client = struct {
         for (0..self.pool_len) |i| {
             const s = self.pool[i].session;
             if (s.isDead()) {
-                s.in_pool.store(false, .release);
+                s.in_pool.store(0, .release);
                 dead[dead_n] = s;
                 dead_n += 1;
                 continue;
@@ -703,7 +703,7 @@ pub const Client = struct {
         const s = self.pool[idx].session;
         self.pool_len -= 1;
         self.pool[idx] = self.pool[self.pool_len];
-        s.in_pool.store(false, .release);
+        s.in_pool.store(0, .release);
         self.pool_mutex.unlock();
 
         for (dead[0..dead_n]) |d| d.release();
@@ -721,7 +721,7 @@ pub const Client = struct {
             self.pool_mutex.unlock();
             return;
         }
-        if (s.in_pool.load(.acquire)) {
+        if (s.in_pool.load(.acquire) != 0) {
             for (0..self.pool_len) |i| {
                 if (self.pool[i].session == s) {
                     self.pool[i].since_ms = std.time.milliTimestamp();
@@ -744,14 +744,14 @@ pub const Client = struct {
                 return;
             };
             evicted = self.pool[victim].session;
-            evicted.?.in_pool.store(false, .release);
+            evicted.?.in_pool.store(0, .release);
             self.pool_len -= 1;
             self.pool[victim] = self.pool[self.pool_len];
         }
         self.pool[self.pool_len] = .{ .session = s, .since_ms = std.time.milliTimestamp() };
         self.pool_len += 1;
         s.acquire(); // the pool owns a reference while the entry exists
-        s.in_pool.store(true, .release);
+        s.in_pool.store(1, .release);
         self.pool_mutex.unlock();
 
         if (evicted) |v| {
@@ -775,7 +775,7 @@ pub const Client = struct {
             self.pool[idx] = self.pool[self.pool_len];
             removed = true;
         }
-        s.in_pool.store(false, .release);
+        s.in_pool.store(0, .release);
         self.pool_mutex.unlock();
         if (removed) s.release(); // pool reference
     }
@@ -783,9 +783,9 @@ pub const Client = struct {
     // -- janitor ------------------------------------------------------------
 
     fn janitorMain(self: *Client) void {
-        while (!self.stop_flag.load(.acquire)) {
+        while (self.stop_flag.load(.acquire) == 0) {
             std.Thread.sleep(1000 * std.time.ns_per_ms);
-            if (self.stop_flag.load(.acquire)) return;
+            if (self.stop_flag.load(.acquire) != 0) return;
             self.janitorTick();
         }
     }
@@ -844,7 +844,7 @@ pub const Client = struct {
             var w: usize = 0;
             for (0..self.pool_len) |i| {
                 if (removed[i]) {
-                    self.pool[i].session.in_pool.store(false, .release);
+                    self.pool[i].session.in_pool.store(0, .release);
                     continue;
                 }
                 self.pool[w] = self.pool[i];
@@ -888,7 +888,7 @@ pub const Client = struct {
     }
 
     pub fn stop(self: *Client) void {
-        self.stop_flag.store(true, .release);
+        self.stop_flag.store(1, .release);
         const snapshot = self.snapshotSessions() catch return;
         defer self.alloc.free(snapshot);
         for (snapshot) |s| {
