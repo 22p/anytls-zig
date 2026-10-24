@@ -113,7 +113,7 @@ readelf -h -l zig-out/bin/anytls-zig   # 无 INTERP、无 NEEDED
   `arm_cortex-a7_neon-vfpv4` 两个标签。
 * CI 为 aarch64、armv7 和 MIPS 同时发布 `ReleaseSmall`（无后缀）与
   `ReleaseFast`（`-fast`），x86-64 只发布 `ReleaseFast`。0.17.0 体积：
-  aarch64 472 KB / 869 KB、armv7 697 KB / 1.33 MB、mips 1.08 MB / 2.13 MB、
+  aarch64 472 KB / 869 KB、armv7 774 KB / 1.37 MB、mips 1.08 MB / 2.13 MB、
   x86-64 – / 1.06 MB。Zig 0.17 的 `ReleaseSmall` 加密代码生成会让 AES-GCM
   慢约一倍，flash 允许时优先用 fast。aarch64 fast 使用 `+aes+sha2`，x86-64
   使用 `+aes+pclmul+avx`（要求 AES-NI、PCLMULQDQ、AVX，约 2011 年后的 CPU）。

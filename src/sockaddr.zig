@@ -7,6 +7,7 @@
 //! address conversion here.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const posix = std.posix;
 const IpAddress = std.Io.net.IpAddress;
 
@@ -24,7 +25,9 @@ pub fn toSockaddr(addr: IpAddress, storage: *posix.sockaddr.storage) posix.sockl
             sin.* = .{
                 .family = posix.AF.INET,
                 .port = std.mem.nativeToBig(u16, a.port),
-                .addr = @bitCast(a.bytes),
+                // sin_addr holds the address in network byte order, so
+                // the integer value must reproduce those bytes natively.
+                .addr = std.mem.readInt(u32, &a.bytes, builtin.cpu.arch.endian()),
             };
             break :blk @sizeOf(posix.sockaddr.in);
         },

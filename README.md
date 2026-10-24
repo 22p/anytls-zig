@@ -126,7 +126,7 @@ Notes:
   packaged under both `arm_cortex-a7` and `arm_cortex-a7_neon-vfpv4`.
 * CI publishes `ReleaseSmall` (no suffix) and `ReleaseFast` (`-fast`) for
   aarch64, armv7 and MIPS, and only `ReleaseFast` for x86-64. 0.17.0 sizes:
-  aarch64 472 KB / 869 KB, armv7 697 KB / 1.33 MB, mips 1.08 MB / 2.13 MB,
+  aarch64 472 KB / 869 KB, armv7 774 KB / 1.37 MB, mips 1.08 MB / 2.13 MB,
   x86-64 – / 1.06 MB. Zig 0.17's `ReleaseSmall` crypto codegen is about twice
   as slow for AES-GCM, so prefer the fast build where flash allows it. aarch64
   fast uses `+aes+sha2`; x86-64 uses `+aes+pclmul+avx` (requires AES-NI,
