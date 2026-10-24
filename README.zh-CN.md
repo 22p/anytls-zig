@@ -290,11 +290,12 @@ RSS、2 个线程；10 个并发会话加 10 个活跃 stream 时约 2.9 MB（�
 
 | 测试 | 结果 |
 |---|---|
-| 单元测试：帧编解码、SOCKS 地址编码、默认方案 MD5（`75cff2ad…`）、填充解析与尺寸生成、settings、有界管道、TOML 解析、配置优先级、随附示例配置 | 16/16 通过 |
+| 单元测试：帧编解码、SOCKS 地址编码、UDP/UoT 组帧、默认方案 MD5（`75cff2ad…`）、填充解析与尺寸生成、settings、有界管道、TOML 解析、配置优先级、随附示例配置 | 18/18 通过 |
 | TOML 配置端到端：仅用配置文件启动、命令行覆盖、TOML 中的密码、重复键/未知键/类型/表头错误诊断 | 通过 |
 | LuCI 翻译覆盖（`scripts/check-luci-i18n.py`） | 31/31 条已翻译 |
 | TLS 1.3 + 证书链 + SNI | 协商为 `tls_1_3`；错误 SNI 报 `CertificateHostMismatch` |
 | SOCKS5 CONNECT，IPv4 目标 | 200 / 内容正确 |
+| SOCKS5 UDP ASSOCIATE（UoT v2）：经 `1.1.1.1:53` 的 DNS、16 KiB 回显、同一关联内两个目标 | 响应正确，16 KiB 数据完整，超限数据报被丢弃且不破坏关联 |
 | 域名目标（由服务端解析） | 200 / 内容正确 |
 | 10 MB 传输 | SHA-256 与源文件一致 |
 | 8 个并发请求 | 内容全部一致，复用同一会话（stream 2–8） |
@@ -319,8 +320,10 @@ RSS、2 个线程；10 个并发会话加 10 个活跃 stream 时约 2.9 MB（�
 
 ## 已知限制 / 有意的取舍
 
-* 仅支持 SOCKS5 CONNECT（不支持 SOCKS4、HTTP CONNECT、UDP/UoT）。参考客户端还
-  接受 SOCKS4/HTTP；任何会说 SOCKS5 的客户端都可以使用本程序。
+* 支持 SOCKS5 CONNECT 和 UDP ASSOCIATE（不支持 SOCKS4、HTTP CONNECT）。UDP 通过
+  sing-box udp-over-tcp v2（`sp.v2.udp-over-tcp.arpa`）承载，因此服务端需要支持
+  UoT（anytls-go 0.0.13 支持）。超过 16 KiB 的数据报会在本地丢弃：参考实现的
+  UoT 读取缓冲区是 16 KiB。
 * TOML 只支持一个小子集（不支持数组、内联表、多行字符串或点号键），并且对未知键
   直接报错而不是忽略。
 * LuCI 只编辑 UCI；TOML 是面向命令行/系统服务部署的另一套机制，不由 Web UI 管理。

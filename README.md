@@ -313,11 +313,12 @@ a locally generated CA and a `localhost` certificate, and a local HTTP origin.
 
 | Test | Result |
 |---|---|
-| Unit tests: frame codec, SOCKS address encoding, default scheme MD5 (`75cff2ad…`), padding parsing/size generation, settings, bounded pipe, TOML parser, option precedence, shipped example config | 16/16 pass |
+| Unit tests: frame codec, SOCKS address encoding, UDP/UoT framing, default scheme MD5 (`75cff2ad…`), padding parsing/size generation, settings, bounded pipe, TOML parser, option precedence, shipped example config | 18/18 pass |
 | TOML config end-to-end: config-only startup, CLI override, password in TOML, duplicate key/unknown key/type/table diagnostics | pass |
 | LuCI catalog coverage (`scripts/check-luci-i18n.py`) | 31/31 strings translated |
 | TLS 1.3 + chain + SNI | `tls_1_3` negotiated; `CertificateHostMismatch` with wrong SNI |
 | SOCKS5 CONNECT, IPv4 target | 200 / correct body |
+| SOCKS5 UDP ASSOCIATE (UoT v2): DNS via `1.1.1.1:53`, 16 KiB echo, two destinations on one association | correct responses, 16 KiB payload intact, oversized datagrams dropped without killing the association |
 | Domain target (resolved by server) | 200 / correct body |
 | 10 MB transfer | SHA-256 identical to source |
 | 8 concurrent requests | all bodies identical, multiplexed on one session (streams 2–8) |
@@ -344,8 +345,10 @@ before rollout.
 
 ## Known limitations / deliberate scopes
 
-* SOCKS5 CONNECT only (no SOCKS4, no HTTP CONNECT, no UDP/UoT). The reference
-  client also accepts SOCKS4/HTTP; anything that speaks SOCKS5 works.
+* SOCKS5 CONNECT and UDP ASSOCIATE (no SOCKS4, no HTTP CONNECT). UDP is
+  tunnelled with sing-box udp-over-tcp v2 (`sp.v2.udp-over-tcp.arpa`), so the
+  server must support UoT (anytls-go 0.0.13 does). Datagrams above 16 KiB are
+  dropped locally: the reference UoT reader uses a 16 KiB buffer.
 * The TOML reader supports a small subset (no arrays, inline tables, multiline
   strings or dotted keys) and rejects unknown keys rather than ignoring them.
 * LuCI edits UCI only; the TOML file is a separate mechanism for CLI/systemd

@@ -5,6 +5,7 @@ const Pipe = @import("pipe.zig").Pipe;
 const toml = @import("toml.zig");
 const config = @import("config.zig");
 const log = @import("log.zig");
+const udp = @import("udp.zig");
 
 test "frame header roundtrip" {
     var h: [proto.header_len]u8 = undefined;
@@ -215,4 +216,42 @@ test "shipped example config parses and maps" {
     try testing.expectEqualStrings("change-me", ov.password.?);
     try testing.expectEqual(@as(usize, 5), ov.min_idle.?);
     try testing.expectEqual(log.Level.info, ov.level.?);
+}
+
+test "socks5 udp packet parse and rebuild" {
+    // RSV RSV FRAG ATYP=1 1.2.3.4 :53 "hi"
+    const pkt = [_]u8{ 0, 0, 0, 1, 1, 2, 3, 4, 0, 53, 'h', 'i' };
+    const p = try udp.parseUdpPacket(&pkt);
+    try testing.expectEqual(@as(u8, 1), p.key.atyp);
+    try testing.expectEqualSlices(u8, &.{ 1, 2, 3, 4 }, p.key.addr[0..4]);
+    try testing.expectEqual(@as(u16, 53), p.key.port);
+    try testing.expectEqualStrings("hi", p.payload);
+
+    var hdr: [64]u8 = undefined;
+    const out = udp.buildSocksUdpHeader(&hdr, p.key);
+    try testing.expectEqualSlices(u8, pkt[0..10], out);
+
+    try testing.expectError(error.Fragmented, udp.parseUdpPacket(&.{ 0, 0, 1, 1, 1, 2, 3, 4, 0, 53 }));
+    try testing.expectError(error.ShortPacket, udp.parseUdpPacket(&.{ 0, 0, 0, 1, 1, 2, 3 }));
+}
+
+test "uot request encodes address families for udp-over-tcp v2" {
+    var buf: [300]u8 = undefined;
+
+    const v4 = udp.buildUotRequest(&buf, .{ .atyp = 1, .addr = .{ 9, 8, 7, 6 } ++ @as([12]u8, @splat(0)), .port = 53 });
+    try testing.expectEqualSlices(u8, &.{ 1, 1, 9, 8, 7, 6, 0, 53 }, v4);
+
+    var name: [16]u8 = @splat(0);
+    @memcpy(name[0..11], "dns.example");
+    const dom = udp.buildUotRequest(&buf, .{
+        .atyp = 3,
+        .addr = name,
+        .dlen = 11,
+        .port = 5353,
+    });
+    try testing.expectEqual(@as(u8, 1), dom[0]);
+    try testing.expectEqual(@as(u8, 0x03), dom[1]);
+    try testing.expectEqual(@as(u8, 11), dom[2]);
+    try testing.expectEqualStrings("dns.example", dom[3..14]);
+    try testing.expectEqual(@as(u16, 5353), std.mem.readInt(u16, dom[14..16], .big));
 }

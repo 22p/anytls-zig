@@ -1,12 +1,14 @@
-//! SOCKS5 CONNECT inbound (no auth), mirroring the reference client's local
-//! entry point. Target names are forwarded to the server unresolved, so DNS
-//! happens on the proxy side unless the client sends a literal address.
+//! SOCKS5 CONNECT and UDP ASSOCIATE inbound (no auth), mirroring the reference
+//! client's local entry point. Target names are forwarded to the server
+//! unresolved, so DNS happens on the proxy side unless the client sends a
+//! literal address. UDP associations are carried over TCP with UoT v2.
 
 const std = @import("std");
 const net = std.net;
 const posix = std.posix;
 const anytls = @import("anytls.zig");
 const proto = @import("protocol.zig");
+const udp = @import("udp.zig");
 const log = @import("log.zig");
 
 const handshake_timeout_ms: u32 = 30_000;
@@ -24,6 +26,10 @@ pub fn handle(client: *anytls.Client, fd: posix.socket_t, half_close_wait_ns: u6
     };
     setRecvTimeout(fd, 0);
 
+    if (req.cmd == 3) {
+        udp.run(client, fd);
+        return;
+    }
     if (req.cmd != 1) {
         reply(fd, 0x07);
         return;
