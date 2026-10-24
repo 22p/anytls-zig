@@ -112,6 +112,9 @@ readelf -h -l zig-out/bin/anytls-zig   # 无 INTERP、无 NEEDED
 * `scripts/make-apk.sh` 可把已构建的二进制打成 OpenWrt apk；CI 会为所有目标生成。
 * `scripts/make-luci-apk.sh` 生成与架构无关的 `luci-app-anytls-zig` apk，并在打包时
   把 `po/zh_Hans` 编译成 `.lmo`（与 LuCI 官方 `po2lmo` 输出逐字节一致）。
+* 两个打包脚本都需要 apk-tools 3（`apk mkpkg`）：设置
+  `APK=/path/to/apk.static` 或保证 `apk` 在 `PATH` 中。产物是 ADB v3 格式，
+  即 OpenWrt snapshot / 25.x 使用的格式。
 
 ## 配置
 
@@ -185,12 +188,12 @@ apk add --allow-untrusted anytls-zig_0.1.0-r1_<arch>.apk
    如果需要 Web 界面，再安装与架构无关的 LuCI 包：
 
 ```sh
-apk add --allow-untrusted luci-app-anytls-zig_0.1.0-r1_all.apk
+apk add --allow-untrusted luci-app-anytls-zig_<version>_noarch.apk
 ```
 
-   两者都是 apk-tools 2.x 的 tar.gz（apk v2）格式（OpenWrt 24.10 +
-   `CONFIG_USE_APK`）；使用 apk-tools 3 的镜像请用 OpenWrt SDK 和
-   `openwrt/`、`openwrt/luci/` 构建。包未签名：用镜像信任的密钥签名，或使用
+   两者都是 apk-tools 3 的 ADB v3 包（OpenWrt snapshot / 25.x）。OpenWrt 24.10
+   及更早版本使用 opkg：可直接安装二进制，或用 OpenWrt SDK 配合 `openwrt/`、
+   `openwrt/luci/` 构建 .ipk。包未签名：用镜像信任的密钥签名，或使用
    `--allow-untrusted`。也可以直接把 `zig-out/bin/anytls-zig` 复制到
    `/usr/bin/anytls-zig`，再把 `openwrt/files/` 中的文件放到对应位置。
 
@@ -227,7 +230,7 @@ logread -e anytls-zig
 * 在 `make menuconfig` 中选中 `luci-app-anytls-zig`（依赖 `anytls-zig`）；
 * 页面位于 **服务 → AnyTLS Zig**，提供英文与简体中文（`zh_Hans`）。
 
-CI 会生成 `luci-app-anytls-zig_<version>_all.apk`；翻译在打包时编译为 `.lmo`，
+CI 会生成 `luci-app-anytls-zig_<version>_noarch.apk`；翻译在打包时编译为 `.lmo`，
 不需要额外的 i18n 包。
 
 表单覆盖监听地址、服务器/SNI、密码、CA 证书、校验开关、超时、会话池、stream
@@ -286,8 +289,8 @@ RSS、2 个线程；10 个并发会话加 10 个活跃 stream 时约 2.9 MB（�
 | 同端口重复启动 | `AddressInUse`（不会因 SO_REUSEPORT 静默共享端口） |
 | 日志凭据泄漏 | 所有日志中均无密码 |
 | 交叉编译 `mipsel-linux-musleabi` / `mips-linux-musleabi` / `arm-linux-musleabihf` / `aarch64-linux-musl` / `x86_64-linux-musl` | ELF32 LSB/MSB MIPS32r2 o32 软浮点、ARM EABI5 硬浮点、ELF64 aarch64/x86-64，均为静态链接且无动态段 |
-| OpenWrt apk（`scripts/make-apk.sh`） | 可复现（重建 SHA-256 相同）、`.PKGINFO` 与权限正确、覆盖 5 种架构 |
-| LuCI apk（`scripts/make-luci-apk.sh`） | 可复现；包含 JS、菜单、ACL 与 `.lmo`，其 `.lmo` 与官方 `po2lmo` 输出逐字节一致 |
+| OpenWrt apk（`scripts/make-apk.sh`） | ADB v3；用 apk-tools 3.0.8 安装到 chroot 验证，权限与依赖正确，覆盖 5 种架构 |
+| LuCI apk（`scripts/make-luci-apk.sh`） | ADB v3、`noarch`，可随 `luci-base` + `anytls-zig` 安装；`.lmo` 与官方 `po2lmo` 输出逐字节一致 |
 | aarch64 吞吐 / 延迟 / CPU / RSS | [docs/bench-aarch64.md](docs/bench-aarch64.md)：106–376 MB/s、0.21–0.23 ms、1.3–1.7 MB RSS |
 
 **未执行：** 在真实路由器硬件或 QEMU 上运行交叉编译的二进制。测试环境没有设备

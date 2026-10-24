@@ -124,6 +124,9 @@ Notes:
   workflow builds apks for all targets.
 * `scripts/make-luci-apk.sh` builds the arch-independent `luci-app-anytls-zig`
   apk, compiling `po/zh_Hans` into `.lmo` (byte-identical to LuCI's `po2lmo`).
+* Both packaging scripts need apk-tools 3 (`apk mkpkg`): set
+  `APK=/path/to/apk.static` or have `apk` in `PATH`. They produce ADB v3
+  packages, the format used by OpenWrt snapshots and 25.x.
 
 ## Configuration
 
@@ -198,15 +201,15 @@ apk add --allow-untrusted anytls-zig_0.1.0-r1_<arch>.apk
    For the web UI install the arch-independent LuCI package as well:
 
 ```sh
-apk add --allow-untrusted luci-app-anytls-zig_0.1.0-r1_all.apk
+apk add --allow-untrusted luci-app-anytls-zig_<version>_noarch.apk
 ```
 
-   Both are tar.gz apk v2 packages (apk-tools 2.x, OpenWrt 24.10 with
-   `CONFIG_USE_APK`); images with apk-tools 3 should build them with the
-   OpenWrt SDK from `openwrt/` and `openwrt/luci/`. The packages are unsigned:
-   sign them with the key trusted by the image, or use `--allow-untrusted`.
-   Alternatively copy `zig-out/bin/anytls-zig` to `/usr/bin/anytls-zig` and the
-   files from `openwrt/files/` into place.
+   Both are ADB v3 packages for apk-tools 3 (OpenWrt snapshots / 25.x).
+   OpenWrt 24.10 and older use opkg; there, install the binary directly or
+   build an .ipk with the OpenWrt SDK from `openwrt/` and `openwrt/luci/`.
+   The packages are unsigned: sign them with the key trusted by the image, or
+   use `--allow-untrusted`. Alternatively copy `zig-out/bin/anytls-zig` to
+   `/usr/bin/anytls-zig` and the files from `openwrt/files/` into place.
 
 2. Install the CA bundle: `opkg install ca-bundle` (or `apk add ca-bundle`).
 3. Set the password and protect the file:
@@ -245,7 +248,7 @@ above:
 * the page appears under **Services → AnyTLS Zig** in English and Simplified
   Chinese (`zh_Hans`).
 
-CI builds this as `luci-app-anytls-zig_<version>_all.apk`; the translation is
+CI builds this as `luci-app-anytls-zig_<version>_noarch.apk`; the translation is
 compiled to `.lmo` at package time, so no extra i18n package is needed.
 
 The form covers the listen address, server/SNI, password, CA bundle,
@@ -306,8 +309,8 @@ a locally generated CA and a `localhost` certificate, and a local HTTP origin.
 | Duplicate instance on same port | `AddressInUse` (no silent SO_REUSEPORT sharing) |
 | Credential leakage in logs | password absent from all logs |
 | Cross-compile `mipsel-linux-musleabi` / `mips-linux-musleabi` / `arm-linux-musleabihf` / `aarch64-linux-musl` / `x86_64-linux-musl` | ELF32 LSB/MSB MIPS32r2 o32 soft-float, ARM EABI5 hard-float, ELF64 aarch64/x86-64; all static with no dynamic section |
-| OpenWrt apk (`scripts/make-apk.sh`) | reproducible (identical SHA-256 on rebuild), `.PKGINFO` + correct modes, 5 architectures |
-| LuCI apk (`scripts/make-luci-apk.sh`) | reproducible; contains JS, menu, ACL and `.lmo` byte-identical to LuCI `po2lmo` output |
+| OpenWrt apk (`scripts/make-apk.sh`) | ADB v3; installed with apk-tools 3.0.8 into a chroot, correct modes and dependency, 5 architectures |
+| LuCI apk (`scripts/make-luci-apk.sh`) | ADB v3, `noarch`, installs with `luci-base` + `anytls-zig`; `.lmo` byte-identical to LuCI `po2lmo` |
 | aarch64 throughput / latency / CPU / RSS | [docs/bench-aarch64.md](docs/bench-aarch64.md): 106–376 MB/s, 0.21–0.23 ms, 1.3–1.7 MB RSS |
 
 **Not executed:** running the cross-built binaries on real router hardware, or

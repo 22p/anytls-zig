@@ -107,6 +107,16 @@ jobs:
           restore-keys: |
             zig-${{ env.ZIG_VERSION }}-${{ matrix.name }}-
 
+      - name: Install apk-tools 3
+        run: |
+          set -euo pipefail
+          url="https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86_64/apk-tools-static-3.0.8-r0.apk"
+          curl -fsSL "$url" -o "$RUNNER_TEMP/apk-tools.apk"
+          mkdir -p "$RUNNER_TEMP/apk-tools"
+          tar -xzf "$RUNNER_TEMP/apk-tools.apk" -C "$RUNNER_TEMP/apk-tools" 2>/dev/null
+          echo "APK=$RUNNER_TEMP/apk-tools/sbin/apk.static" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/apk-tools/sbin/apk.static" --version
+
       - name: Version
         id: ver
         run: |
@@ -135,10 +145,11 @@ jobs:
 
       - name: Package OpenWrt apk
         run: |
-          scripts/make-apk.sh "out/anytls-zig-${{ matrix.name }}" \
+          sudo env "APK=$APK" scripts/make-apk.sh "out/anytls-zig-${{ matrix.name }}" \
             "${{ matrix.owrt_arch }}" "${{ steps.ver.outputs.apk }}" \
             "out/anytls-zig_${{ steps.ver.outputs.apk }}_${{ matrix.owrt_arch }}.apk"
-          tar -tzf out/anytls-zig_*.apk | grep -qx '.PKGINFO'
+          "$APK" adbdump out/anytls-zig_*.apk | grep -q "name: anytls-zig"
+          "$APK" adbdump out/anytls-zig_*.apk | grep -q "arch: ${{ matrix.owrt_arch }}"
           ls -l out/*.apk
 
       - uses: actions/upload-artifact@v4
@@ -155,6 +166,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install apk-tools 3
+        run: |
+          set -euo pipefail
+          url="https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86_64/apk-tools-static-3.0.8-r0.apk"
+          curl -fsSL "$url" -o "$RUNNER_TEMP/apk-tools.apk"
+          mkdir -p "$RUNNER_TEMP/apk-tools"
+          tar -xzf "$RUNNER_TEMP/apk-tools.apk" -C "$RUNNER_TEMP/apk-tools" 2>/dev/null
+          echo "APK=$RUNNER_TEMP/apk-tools/sbin/apk.static" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/apk-tools/sbin/apk.static" --version
+
       - name: Version
         id: ver
         run: |
@@ -168,10 +189,11 @@ jobs:
       - name: Build LuCI apk
         run: |
           mkdir -p out
-          scripts/make-luci-apk.sh "${{ steps.ver.outputs.apk }}" \
-            "out/luci-app-anytls-zig_${{ steps.ver.outputs.apk }}_all.apk"
-          tar -tzf out/luci-app-anytls-zig_*.apk | grep -qx 'usr/lib/lua/luci/i18n/anytls-zig.zh_Hans.lmo'
-          tar -tzf out/luci-app-anytls-zig_*.apk | grep -qx 'www/luci-static/resources/view/anytls-zig/settings.js'
+          sudo env "APK=$APK" scripts/make-luci-apk.sh "${{ steps.ver.outputs.apk }}" \
+            "out/luci-app-anytls-zig_${{ steps.ver.outputs.apk }}_noarch.apk"
+          "$APK" adbdump out/luci-app-anytls-zig_*.apk | grep -q "name: luci-app-anytls-zig"
+          "$APK" adbdump out/luci-app-anytls-zig_*.apk | grep -q "arch: noarch"
+          "$APK" adbdump out/luci-app-anytls-zig_*.apk | grep -q "anytls-zig.zh_Hans.lmo"
           ls -l out/*.apk
 
       - uses: actions/upload-artifact@v4
