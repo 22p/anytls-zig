@@ -34,7 +34,7 @@ pub const client_name = "anytls-zig/0.1.0";
 
 pub fn encodeHeader(h: *[header_len]u8, cmd: Command, sid: u32, data_len: usize) void {
     std.debug.assert(data_len <= std.math.maxInt(u16));
-    h[0] = @intFromEnum(cmd);
+    h[0] = @backingInt(cmd);
     std.mem.writeInt(u32, h[1..5], sid, .big);
     std.mem.writeInt(u16, h[5..7], @intCast(data_len), .big);
 }
@@ -144,7 +144,7 @@ pub const Scheme = struct {
         var saw_stop = false;
         var lines = std.mem.splitScalar(u8, raw, '\n');
         while (lines.next()) |line_raw| {
-            const line = std.mem.trimRight(u8, line_raw, "\r");
+            const line = std.mem.trimEnd(u8, line_raw, "\r");
             if (line.len == 0) continue;
             const eq = std.mem.indexOfScalar(u8, line, '=') orelse continue;
             const key = line[0..eq];
@@ -192,7 +192,7 @@ pub const Scheme = struct {
     }
 
     /// Flattened per-packet size list, `check_mark` for "c".
-    pub fn sizesFor(self: *const Scheme, pkt_in: u32, out: *[max_entries]u32) []u32 {
+    pub fn sizesFor(self: *const Scheme, rng: std.Random, pkt_in: u32, out: *[max_entries]u32) []u32 {
         if (pkt_in >= max_pkts) return out[0..0];
         const pkt: usize = @intCast(pkt_in);
         const count = self.counts[pkt];
@@ -202,16 +202,16 @@ pub const Scheme = struct {
                 .range => |r| if (r.min == r.max)
                     r.min
                 else
-                    r.min + std.crypto.random.intRangeLessThan(u32, 0, r.max - r.min),
+                    r.min + rng.intRangeLessThan(u32, 0, r.max - r.min),
             };
         }
         return out[0..count];
     }
 
     /// padding0 length for the auth packet: first size of packet 0.
-    pub fn authPadLen(self: *const Scheme) u16 {
+    pub fn authPadLen(self: *const Scheme, rng: std.Random) u16 {
         var out: [max_entries]u32 = undefined;
-        const sizes = self.sizesFor(0, &out);
+        const sizes = self.sizesFor(rng, 0, &out);
         for (sizes) |s| {
             if (s != check_mark) return @intCast(@min(s, 4096));
         }
@@ -243,7 +243,7 @@ pub fn buildSettings(out: []u8, scheme: *const Scheme) []u8 {
 pub fn parseKVInt(data: []const u8, key: []const u8) ?u32 {
     var lines = std.mem.splitScalar(u8, data, '\n');
     while (lines.next()) |line_raw| {
-        const line = std.mem.trimRight(u8, line_raw, "\r");
+        const line = std.mem.trimEnd(u8, line_raw, "\r");
         const eq = std.mem.indexOfScalar(u8, line, '=') orelse continue;
         if (!std.mem.eql(u8, line[0..eq], key)) continue;
         return std.fmt.parseInt(u32, line[eq + 1 ..], 10) catch null;

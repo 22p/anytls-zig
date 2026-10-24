@@ -28,7 +28,7 @@ test "target encoding matches SOCKS5 address format" {
     try testing.expectEqualSlices(u8, "example.com", dom[2..13]);
     try testing.expectEqualSlices(u8, &.{ 0, 80 }, dom[13..15]);
 
-    const v6 = try proto.encodeTarget(&buf, .{ .ip6 = [_]u8{0} ** 16 }, 1);
+    const v6 = try proto.encodeTarget(&buf, .{ .ip6 = @splat(0) }, 1);
     try testing.expectEqual(@as(usize, 19), v6.len);
     try testing.expectEqual(@as(u8, 4), v6[0]);
 }
@@ -41,19 +41,21 @@ test "default padding scheme matches anytls-go md5 and structure" {
     s.md5Hex(&hex);
     try testing.expectEqualStrings("75cff2ad89aadf5e257059ee571ebe11", &hex);
     try testing.expectEqual(@as(u32, 8), s.stop);
-    try testing.expectEqual(@as(u16, 30), s.authPadLen());
+    var prng = std.Random.DefaultPrng.init(0x12345678);
+    const rng = prng.random();
+    try testing.expectEqual(@as(u16, 30), s.authPadLen(rng));
 
     var out: [proto.max_entries]u32 = undefined;
-    const p1 = s.sizesFor(1, &out);
+    const p1 = s.sizesFor(rng, 1, &out);
     try testing.expectEqual(@as(usize, 1), p1.len);
     try testing.expect(p1[0] >= 100 and p1[0] < 400);
 
-    const p2 = s.sizesFor(2, &out);
+    const p2 = s.sizesFor(rng, 2, &out);
     try testing.expectEqual(@as(usize, 9), p2.len);
     try testing.expectEqual(proto.check_mark, p2[1]);
     try testing.expect(p2[0] >= 400 and p2[0] < 500);
 
-    const p3 = s.sizesFor(3, &out);
+    const p3 = s.sizesFor(rng, 3, &out);
     try testing.expectEqual(@as(u32, 9), p3[0]);
 }
 
@@ -67,11 +69,12 @@ test "custom scheme ignores unknown keys and bad ranges" {
     const s = try proto.Scheme.parse(testing.allocator, "stop=3\nfoo=bar\n0=100-100\n1=50-60,c,abc,70-70\n2=x-y");
     defer s.destroy(testing.allocator);
     var out: [proto.max_entries]u32 = undefined;
-    const s1 = s.sizesFor(1, &out);
+    var prng2 = std.Random.DefaultPrng.init(0xabcdef);
+    const s1 = s.sizesFor(prng2.random(), 1, &out);
     try testing.expectEqual(@as(usize, 3), s1.len);
     try testing.expectEqual(@as(u32, proto.check_mark), s1[1]);
     try testing.expectEqual(@as(u32, 70), s1[2]);
-    try testing.expectEqual(@as(usize, 0), s.sizesFor(2, &out).len);
+    try testing.expectEqual(@as(usize, 0), s.sizesFor(prng2.random(), 2, &out).len);
 }
 
 test "settings blob carries protocol version and scheme md5" {
@@ -91,7 +94,7 @@ test "server key/value parsing" {
 }
 
 test "bounded pipe preserves order and reports EOF" {
-    var p = try Pipe.init(testing.allocator, 8);
+    var p = try Pipe.init(testing.allocator, testing.io, 8);
     defer p.deinit(testing.allocator);
 
     try p.write("abcdefgh");
@@ -107,7 +110,7 @@ test "bounded pipe preserves order and reports EOF" {
 }
 
 test "pipe abort discards data and wakes readers" {
-    var p = try Pipe.init(testing.allocator, 8);
+    var p = try Pipe.init(testing.allocator, testing.io, 8);
     defer p.deinit(testing.allocator);
     try p.write("xyz");
     p.abort();
@@ -204,7 +207,7 @@ test "config: unknown key and bad types are reported" {
 }
 
 test "shipped example config parses and maps" {
-    const text = try std.fs.cwd().readFileAlloc(testing.allocator, "config/anytls-zig.toml", 64 * 1024);
+    const text = try std.Io.Dir.cwd().readFileAlloc(testing.io, "config/anytls-zig.toml", testing.allocator, .limited(64 * 1024));
     defer testing.allocator.free(text);
     var diag: toml.Diag = .{};
     const t = try toml.parse(testing.allocator, text, &diag);

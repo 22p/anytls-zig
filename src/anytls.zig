@@ -9,7 +9,12 @@ const log = @import("log.zig");
 
 const Allocator = std.mem.Allocator;
 
+fn nowMs(io: std.Io) i64 {
+    return std.Io.Timestamp.now(io, .real).toMilliseconds();
+}
+
 pub const Config = struct {
+    io: std.Io,
     host: []const u8,
     port: u16,
     sni: []const u8,
@@ -54,7 +59,7 @@ pub const Stream = struct {
             .session = session,
             .id = id,
             .refs = std.atomic.Value(u32).init(1),
-            .pipe = try Pipe.init(alloc, stream_buffer_size),
+            .pipe = try Pipe.init(alloc, session.client.cfg.io, stream_buffer_size),
             .fin_sent = std.atomic.Value(bool).init(false),
             .closed = std.atomic.Value(bool).init(false),
             .synack = std.atomic.Value(u8).init(0),
@@ -126,9 +131,9 @@ const Session = struct {
     scheme: *const proto.Scheme,
     refs: std.atomic.Value(u32),
     dead: std.atomic.Value(bool),
-    write_mutex: std.Thread.Mutex = .{},
-    open_mutex: std.Thread.Mutex = .{},
-    streams_mutex: std.Thread.Mutex = .{},
+    write_mutex: std.Io.Mutex = .init,
+    open_mutex: std.Io.Mutex = .init,
+    streams_mutex: std.Io.Mutex = .init,
     streams: std.AutoHashMapUnmanaged(u32, *Stream) = .empty,
     next_sid: u32 = 1,
     started: bool = false,
@@ -140,6 +145,10 @@ const Session = struct {
     reader_thread: std.Thread = undefined,
     in_pool: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
     active: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
+
+    fn ioOf(self: *Session) std.Io {
+        return self.client.cfg.io;
+    }
 
     fn create(client: *Client, conn: *tlsm.Conn, seq: u64, scheme: *const proto.Scheme) !*Session {
         const alloc = client.alloc;
@@ -188,13 +197,13 @@ const Session = struct {
         self.conn.shutdown();
         self.client.removeSession(self);
 
-        self.streams_mutex.lock();
+        self.streams_mutex.lockUncancelable(self.ioOf());
         var old = self.streams;
         self.streams = .empty;
         self.active.store(0, .release);
         var it0 = old.iterator();
         while (it0.next()) |e| e.value_ptr.*.in_map = false;
-        self.streams_mutex.unlock();
+        self.streams_mutex.unlock(self.ioOf());
 
         var it = old.iterator();
         while (it.next()) |e| {
@@ -206,8 +215,8 @@ const Session = struct {
     }
 
     fn removeStream(self: *Session, sid: u32) ?*Stream {
-        self.streams_mutex.lock();
-        defer self.streams_mutex.unlock();
+        self.streams_mutex.lockUncancelable(self.ioOf());
+        defer self.streams_mutex.unlock(self.ioOf());
         if (self.streams.fetchRemove(sid)) |kv| {
             kv.value.in_map = false;
             _ = self.active.fetchSub(1, .monotonic);
@@ -217,8 +226,8 @@ const Session = struct {
     }
 
     fn streamRef(self: *Session, sid: u32) ?*Stream {
-        self.streams_mutex.lock();
-        defer self.streams_mutex.unlock();
+        self.streams_mutex.lockUncancelable(self.ioOf());
+        defer self.streams_mutex.unlock(self.ioOf());
         const st = self.streams.get(sid) orelse return null;
         // Safe: the map's own reference cannot be dropped while we hold the lock.
         _ = st.refs.fetchAdd(1, .monotonic);
@@ -226,13 +235,13 @@ const Session = struct {
     }
 
     fn openStream(self: *Session, target: proto.Target, port: u16) !*Stream {
-        self.open_mutex.lock();
-        defer self.open_mutex.unlock();
+        self.open_mutex.lockUncancelable(self.ioOf());
+        defer self.open_mutex.unlock(self.ioOf());
         if (self.isDead()) return error.SessionClosed;
 
-        self.streams_mutex.lock();
+        self.streams_mutex.lockUncancelable(self.ioOf());
         const active = self.streams.count();
-        self.streams_mutex.unlock();
+        self.streams_mutex.unlock(self.ioOf());
         if (active >= self.client.cfg.max_streams_per_session) return error.SessionBusy;
 
         const sid = self.next_sid;
@@ -276,14 +285,14 @@ const Session = struct {
         }
 
         if (self.peer_version.load(.acquire) >= 2 and sid >= 2) {
-            stream.syn_deadline_ms = std.time.milliTimestamp() + self.client.cfg.syn_timeout_ms;
+            stream.syn_deadline_ms = nowMs(self.client.cfg.io) + self.client.cfg.syn_timeout_ms;
         }
         return stream;
     }
 
     fn insertStream(self: *Session, sid: u32, stream: *Stream) !void {
-        self.streams_mutex.lock();
-        defer self.streams_mutex.unlock();
+        self.streams_mutex.lockUncancelable(self.ioOf());
+        defer self.streams_mutex.unlock(self.ioOf());
         const gop = try self.streams.getOrPut(self.client.alloc, sid);
         if (gop.found_existing) return error.DuplicateStream;
         gop.value_ptr.* = stream;
@@ -292,16 +301,16 @@ const Session = struct {
     }
 
     fn writeFrame(self: *Session, total_len: usize) !void {
-        self.write_mutex.lock();
-        defer self.write_mutex.unlock();
+        self.write_mutex.lockUncancelable(self.ioOf());
+        defer self.write_mutex.unlock(self.ioOf());
         if (self.isDead()) return error.SessionClosed;
         return self.flushFrameLocked(total_len);
     }
 
     fn writeControl(self: *Session, cmd: proto.Command, sid: u32, data: []const u8) !void {
         if (data.len > proto.max_data_chunk) return error.TooLarge;
-        self.write_mutex.lock();
-        defer self.write_mutex.unlock();
+        self.write_mutex.lockUncancelable(self.ioOf());
+        defer self.write_mutex.unlock(self.ioOf());
         if (self.isDead()) return error.SessionClosed;
         proto.encodeHeader(self.scratch[0..proto.header_len], cmd, sid, data.len);
         @memcpy(self.scratch[proto.header_len..][0..data.len], data);
@@ -311,8 +320,8 @@ const Session = struct {
     fn writeData(self: *Session, sid: u32, data: []const u8) !void {
         if (data.len == 0) return;
         if (data.len > proto.max_data_chunk) return error.TooLarge;
-        self.write_mutex.lock();
-        defer self.write_mutex.unlock();
+        self.write_mutex.lockUncancelable(self.ioOf());
+        defer self.write_mutex.unlock(self.ioOf());
         if (self.isDead()) return error.SessionClosed;
         proto.encodeHeader(self.scratch[0..proto.header_len], .psh, sid, data.len);
         @memcpy(self.scratch[proto.header_len..][0..data.len], data);
@@ -330,7 +339,9 @@ const Session = struct {
             const pkt = self.pkt_counter;
             if (pkt < self.scheme.stop) {
                 var sizes_buf: [proto.max_entries]u32 = undefined;
-                const sizes = self.scheme.sizesFor(pkt, &sizes_buf);
+                self.client.rng_mutex.lockUncancelable(self.ioOf());
+                const sizes = self.scheme.sizesFor(self.client.rng.random(), pkt, &sizes_buf);
+                self.client.rng_mutex.unlock(self.ioOf());
                 for (sizes) |l_raw| {
                     if (l_raw == proto.check_mark) {
                         if (rem == 0) break else continue;
@@ -401,7 +412,7 @@ const Session = struct {
             const len: usize = h.len;
 
             switch (h.cmd) {
-                @intFromEnum(proto.Command.psh) => {
+                @backingInt(proto.Command.psh) => {
                     var left = len;
                     while (left > 0) {
                         const n = @min(left, self.read_buf.len);
@@ -413,15 +424,15 @@ const Session = struct {
                         left -= n;
                     }
                 },
-                @intFromEnum(proto.Command.fin) => {
+                @backingInt(proto.Command.fin) => {
                     log.debug("session {d}: FIN for stream {d}", .{ self.seq, h.sid });
                     if (self.removeStream(h.sid)) |st| {
                         st.pipe.setEof();
                         st.release();
                     }
                 },
-                @intFromEnum(proto.Command.waste) => self.discard(len) catch return,
-                @intFromEnum(proto.Command.synack) => {
+                @backingInt(proto.Command.waste) => self.discard(len) catch return,
+                @backingInt(proto.Command.synack) => {
                     if (len > 0) {
                         var buf: [256]u8 = undefined;
                         const n = @min(len, buf.len);
@@ -438,7 +449,7 @@ const Session = struct {
                         st.release();
                     }
                 },
-                @intFromEnum(proto.Command.alert) => {
+                @backingInt(proto.Command.alert) => {
                     if (len > 0) {
                         var buf: [512]u8 = undefined;
                         const n = @min(len, buf.len);
@@ -448,7 +459,7 @@ const Session = struct {
                     }
                     return;
                 },
-                @intFromEnum(proto.Command.update_padding_scheme) => {
+                @backingInt(proto.Command.update_padding_scheme) => {
                     var raw: [proto.max_scheme_bytes]u8 = undefined;
                     if (len == 0 or len > raw.len) {
                         self.discard(len) catch return;
@@ -457,13 +468,13 @@ const Session = struct {
                         self.client.updateScheme(raw[0..len]);
                     }
                 },
-                @intFromEnum(proto.Command.heart_request) => {
+                @backingInt(proto.Command.heart_request) => {
                     self.writeControl(.heart_response, h.sid, &.{}) catch return;
                 },
-                @intFromEnum(proto.Command.heart_response) => {
+                @backingInt(proto.Command.heart_response) => {
                     if (len > 0) self.discard(len) catch return;
                 },
-                @intFromEnum(proto.Command.server_settings) => {
+                @backingInt(proto.Command.server_settings) => {
                     var buf: [128]u8 = undefined;
                     const n = @min(len, buf.len);
                     if (n > 0) {
@@ -490,8 +501,8 @@ const Session = struct {
 
     /// Called by the janitor: true when a v2 stream never got its SYNACK.
     fn hasStuckStream(self: *Session, now_ms: i64) bool {
-        self.streams_mutex.lock();
-        defer self.streams_mutex.unlock();
+        self.streams_mutex.lockUncancelable(self.ioOf());
+        defer self.streams_mutex.unlock(self.ioOf());
         var it = self.streams.valueIterator();
         while (it.next()) |stp| {
             const st = stp.*;
@@ -517,27 +528,37 @@ pub const Client = struct {
     alloc: Allocator,
     cfg: Config,
     scheme: std.atomic.Value(*const proto.Scheme),
-    sessions_mutex: std.Thread.Mutex = .{},
+    sessions_mutex: std.Io.Mutex = .init,
     sessions: std.AutoHashMapUnmanaged(u64, *Session) = .empty,
-    pool_mutex: std.Thread.Mutex = .{},
+    pool_mutex: std.Io.Mutex = .init,
     pool: [pool_size]PoolEntry = undefined,
     pool_len: usize = 0,
     /// Session sequence numbers are 64-bit but incremented only under
     /// seq_mutex: 32-bit targets (MIPS32) have no 64-bit atomics.
     seq_counter: u64 = 0,
-    seq_mutex: std.Thread.Mutex = .{},
-    handshake_mutex: std.Thread.Mutex = .{},
+    seq_mutex: std.Io.Mutex = .init,
+    handshake_mutex: std.Io.Mutex = .init,
     stop_flag: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
     janitor_thread: ?std.Thread = null,
+    rng: std.Random.DefaultPrng,
+    rng_mutex: std.Io.Mutex = .init,
+
+    fn ioOf(self: *Client) std.Io {
+        return self.cfg.io;
+    }
 
     pub fn init(alloc: Allocator, cfg: Config) !*Client {
         const self = try alloc.create(Client);
         errdefer alloc.destroy(self);
 
         const scheme = try proto.Scheme.parse(alloc, proto.default_scheme_raw);
+        var seed: [8]u8 = undefined;
+        std.Io.random(cfg.io, &seed);
+        const seed_int = std.mem.readInt(u64, &seed, .little) | 1;
         self.* = .{
             .alloc = alloc,
             .cfg = cfg,
+            .rng = std.Random.DefaultPrng.init(seed_int),
             .scheme = std.atomic.Value(*const proto.Scheme).init(scheme),
         };
 
@@ -594,9 +615,10 @@ pub const Client = struct {
 
     fn createSession(self: *Client) !*Session {
         const cfg = &self.cfg;
-        self.handshake_mutex.lock();
+        self.handshake_mutex.lockUncancelable(self.ioOf());
         const conn = tlsm.Conn.dial(
             self.alloc,
+            cfg.io,
             cfg.host,
             cfg.port,
             cfg.sni,
@@ -604,15 +626,17 @@ pub const Client = struct {
             cfg.insecure,
             cfg.connect_timeout_ms,
         ) catch |e| {
-            self.handshake_mutex.unlock();
+            self.handshake_mutex.unlock(self.ioOf());
             return e;
         };
-        self.handshake_mutex.unlock();
+        self.handshake_mutex.unlock(self.ioOf());
         errdefer conn.destroy();
         log.debug("tls established, sending auth", .{});
 
         const scheme = self.scheme.load(.acquire);
-        const padlen = scheme.authPadLen();
+        self.rng_mutex.lockUncancelable(self.ioOf());
+        const padlen = scheme.authPadLen(self.rng.random());
+        self.rng_mutex.unlock(self.ioOf());
 
         var auth: [34 + max_pad]u8 = undefined;
         @memcpy(auth[0..32], &cfg.password_sha256);
@@ -626,18 +650,18 @@ pub const Client = struct {
         errdefer sess.release();
 
         // Map reference.
-        self.sessions_mutex.lock();
+        self.sessions_mutex.lockUncancelable(self.ioOf());
         const gop = self.sessions.getOrPut(self.alloc, seq) catch |e| {
-            self.sessions_mutex.unlock();
+            self.sessions_mutex.unlock(self.ioOf());
             return e;
         };
         if (gop.found_existing) {
-            self.sessions_mutex.unlock();
+            self.sessions_mutex.unlock(self.ioOf());
             return error.DuplicateSession;
         }
         gop.value_ptr.* = sess;
         sess.acquire();
-        self.sessions_mutex.unlock();
+        self.sessions_mutex.unlock(self.ioOf());
 
         sess.reader_thread = std.Thread.spawn(
             .{ .stack_size = 128 * 1024 },
@@ -654,16 +678,16 @@ pub const Client = struct {
     }
 
     fn nextSeq(self: *Client) u64 {
-        self.seq_mutex.lock();
-        defer self.seq_mutex.unlock();
+        self.seq_mutex.lockUncancelable(self.ioOf());
+        defer self.seq_mutex.unlock(self.ioOf());
         self.seq_counter += 1;
         return self.seq_counter;
     }
 
     fn removeSession(self: *Client, s: *Session) void {
-        self.sessions_mutex.lock();
+        self.sessions_mutex.lockUncancelable(self.ioOf());
         const removed = self.sessions.fetchRemove(s.seq);
-        self.sessions_mutex.unlock();
+        self.sessions_mutex.unlock(self.ioOf());
         if (removed != null) s.release();
     }
 
@@ -673,7 +697,7 @@ pub const Client = struct {
         var dead: [pool_size]*Session = undefined;
         var dead_n: usize = 0;
 
-        self.pool_mutex.lock();
+        self.pool_mutex.lockUncancelable(self.ioOf());
         // Drop entries whose session died while pooled (their pool reference
         // is released below; otherwise both the entry and the session leak).
         var w: usize = 0;
@@ -696,7 +720,7 @@ pub const Client = struct {
             if (best == null or s.seq > self.pool[best.?].session.seq) best = i;
         }
         const idx = best orelse {
-            self.pool_mutex.unlock();
+            self.pool_mutex.unlock(self.ioOf());
             for (dead[0..dead_n]) |s| s.release();
             return null;
         };
@@ -704,7 +728,7 @@ pub const Client = struct {
         self.pool_len -= 1;
         self.pool[idx] = self.pool[self.pool_len];
         s.in_pool.store(false, .release);
-        self.pool_mutex.unlock();
+        self.pool_mutex.unlock(self.ioOf());
 
         for (dead[0..dead_n]) |d| d.release();
         // The pool's reference becomes the caller's temporary reference.
@@ -714,21 +738,21 @@ pub const Client = struct {
     fn insertIdle(self: *Client, s: *Session) void {
         var evicted: ?*Session = null;
 
-        self.pool_mutex.lock();
+        self.pool_mutex.lockUncancelable(self.ioOf());
         // Re-check under the lock: close() marks dead then calls removeIdle,
         // so an insert that lost the race must not add a new entry.
         if (s.isDead()) {
-            self.pool_mutex.unlock();
+            self.pool_mutex.unlock(self.ioOf());
             return;
         }
         if (s.in_pool.load(.acquire)) {
             for (0..self.pool_len) |i| {
                 if (self.pool[i].session == s) {
-                    self.pool[i].since_ms = std.time.milliTimestamp();
+                    self.pool[i].since_ms = nowMs(self.cfg.io);
                     break;
                 }
             }
-            self.pool_mutex.unlock();
+            self.pool_mutex.unlock(self.ioOf());
             return;
         }
         if (self.pool_len == pool_size) {
@@ -740,7 +764,7 @@ pub const Client = struct {
             const victim = oldest orelse {
                 // Every pooled session still carries traffic; keep it and do
                 // not pool this one (it stays usable, just not reusable).
-                self.pool_mutex.unlock();
+                self.pool_mutex.unlock(self.ioOf());
                 return;
             };
             evicted = self.pool[victim].session;
@@ -748,11 +772,11 @@ pub const Client = struct {
             self.pool_len -= 1;
             self.pool[victim] = self.pool[self.pool_len];
         }
-        self.pool[self.pool_len] = .{ .session = s, .since_ms = std.time.milliTimestamp() };
+        self.pool[self.pool_len] = .{ .session = s, .since_ms = nowMs(self.cfg.io) };
         self.pool_len += 1;
         s.acquire(); // the pool owns a reference while the entry exists
         s.in_pool.store(true, .release);
-        self.pool_mutex.unlock();
+        self.pool_mutex.unlock(self.ioOf());
 
         if (evicted) |v| {
             v.close();
@@ -761,7 +785,7 @@ pub const Client = struct {
     }
 
     fn removeIdle(self: *Client, s: *Session) void {
-        self.pool_mutex.lock();
+        self.pool_mutex.lockUncancelable(self.ioOf());
         var found: ?usize = null;
         for (0..self.pool_len) |i| {
             if (self.pool[i].session == s) {
@@ -776,7 +800,7 @@ pub const Client = struct {
             removed = true;
         }
         s.in_pool.store(false, .release);
-        self.pool_mutex.unlock();
+        self.pool_mutex.unlock(self.ioOf());
         if (removed) s.release(); // pool reference
     }
 
@@ -784,19 +808,19 @@ pub const Client = struct {
 
     fn janitorMain(self: *Client) void {
         while (!self.stop_flag.load(.acquire)) {
-            std.Thread.sleep(1000 * std.time.ns_per_ms);
+            std.Io.sleep(self.cfg.io, .fromSeconds(1), .awake) catch {};
             if (self.stop_flag.load(.acquire)) return;
             self.janitorTick();
         }
     }
 
     fn janitorTick(self: *Client) void {
-        const now = std.time.milliTimestamp();
+        const now = nowMs(self.cfg.io);
         var to_close: [pool_size]*Session = undefined;
         var close_count: usize = 0;
 
         // Idle expiry, keeping `min_idle` newest sessions.
-        self.pool_mutex.lock();
+        self.pool_mutex.lockUncancelable(self.ioOf());
         var alive_idx: [pool_size]usize = undefined;
         var alive_n: usize = 0;
         for (0..self.pool_len) |i| {
@@ -821,7 +845,7 @@ pub const Client = struct {
                 return c.pool[a].session.seq > c.pool[b].session.seq;
             }
         }.less);
-        var removed = [_]bool{false} ** pool_size;
+        var removed: [pool_size]bool = @splat(false);
         var removed_any = false;
         for (expired[0..exp_n]) |i| {
             if (self.pool[i].session.active.load(.acquire) != 0) {
@@ -852,7 +876,7 @@ pub const Client = struct {
             }
             self.pool_len = w;
         }
-        self.pool_mutex.unlock();
+        self.pool_mutex.unlock(self.ioOf());
 
         for (to_close[0..close_count]) |s| {
             log.debug("idle session {d} closed", .{s.seq});
@@ -873,8 +897,8 @@ pub const Client = struct {
     }
 
     fn snapshotSessions(self: *Client) ![]*Session {
-        self.sessions_mutex.lock();
-        defer self.sessions_mutex.unlock();
+        self.sessions_mutex.lockUncancelable(self.ioOf());
+        defer self.sessions_mutex.unlock(self.ioOf());
         const n = self.sessions.count();
         if (n == 0) return self.alloc.alloc(*Session, 0);
         const out = try self.alloc.alloc(*Session, n);

@@ -83,11 +83,15 @@ algorithm std does not support.
 
 ## Build
 
-Requires Zig **0.15.1**.
+Requires Zig **0.17.0**.
 
-`zig build` defaults to a **static musl** binary for the host. This matches the
-deployment target, and avoids Zig 0.15.1's native-glibc thread startup, which
-panics on some hosts. Override with `-Dtarget=`/`-Dcpu=` as below.
+`zig build` defaults to a **static musl** binary for the host, which matches the
+deployment target and keeps host builds reproducible. Override with
+`-Dtarget=`/`-Dcpu=` as below.
+
+On x86-64, `ReleaseFast` is about 4x faster than `ReleaseSmall` with 0.17.0
+(see [docs/bench-x86_64.md](docs/bench-x86_64.md)); use `-Doptimize=fast` where
+throughput matters.
 
 Native (for testing):
 
@@ -99,9 +103,9 @@ zig build -Doptimize=Debug
 Static cross-build:
 
 ```sh
-zig build -Doptimize=ReleaseSmall -Dtarget=aarch64-linux-musl
-zig build -Doptimize=ReleaseSmall -Dtarget=arm-linux-musleabihf -Dcpu=cortex_a7-neon
-zig build -Doptimize=ReleaseSmall -Dtarget=mipsel-linux-musleabi -Dcpu=mips32r2
+zig build -Doptimize=ReleaseFast -Dtarget=aarch64-linux-musl
+zig build -Doptimize=ReleaseFast -Dtarget=arm-linux-musleabihf -Dcpu=cortex_a7-neon
+zig build -Doptimize=ReleaseFast -Dtarget=mipsel-linux-musleabi -Dcpu=mips32r2
 
 file zig-out/bin/anytls-zig
 readelf -h -l zig-out/bin/anytls-zig   # no INTERP, no NEEDED
@@ -116,19 +120,19 @@ Notes:
 * The first build for a new target compiles musl from source and can take
   several minutes on a small host; later builds are cached.
 * Equivalent direct command:
-  `zig build-exe src/main.zig -lc -OReleaseSmall -target <triple> -fstrip`
+  `zig build-exe src/main.zig -lc -OReleaseFast -target <triple> -fstrip`
 * The 32-bit ARM build targets ARMv7-A with VFPv4 but without NEON
   (`-Dcpu=cortex_a7-neon`), so it runs on any ARMv7 hard-float target. It is
   packaged under both `arm_cortex-a7` and `arm_cortex-a7_neon-vfpv4`.
-* CI publishes three aarch64 builds (same package name, pick one):
-
-  | File suffix | Build | Size | Throughput |
-  |---|---|---:|---:|
-  | *(none)* | `ReleaseSmall`, generic CPU | 372 KB | ~106 MB/s |
-  | `-aes` | `ReleaseSmall`, `+aes+sha2` | 356 KB | ~160 MB/s |
-  | `-fast` | `ReleaseFast`, `+aes+sha2` | 710 KB | ~376 MB/s |
-
-  Measurements: [docs/bench-aarch64.md](docs/bench-aarch64.md).
+* CI publishes exactly one **`ReleaseFast`** binary per architecture (no
+  `-aes`/`-fast` variants). Zig 0.17's `ReleaseSmall` crypto codegen is about
+  twice as slow for AES-GCM, so the small builds are no longer shipped; the
+  trade-off is size (MIPS32 ~2.1 MB, ARMv7 ~1.3 MB, aarch64 ~0.87 MB,
+  x86-64 ~1.00 MB). aarch64 is built with `+aes+sha2`, x86-64 with
+  `+aes+pclmul+avx` (requires AES-NI, PCLMULQDQ and AVX — roughly 2011 or newer;
+  a `baseline` build is ~2x slower). Measurements:
+  [docs/bench-x86_64.md](docs/bench-x86_64.md) (0.17.0) and
+  [docs/bench-aarch64.md](docs/bench-aarch64.md) (0.15.1).
 * `scripts/make-apk.sh` wraps a built binary into an OpenWrt apk; the CI
   workflow builds apks for all targets.
 * `scripts/make-luci-apk.sh` builds the arch-independent `luci-app-anytls-zig`
@@ -327,7 +331,8 @@ a locally generated CA and a `localhost` certificate, and a local HTTP origin.
 | Cross-compile `mipsel-linux-musleabi` / `mips-linux-musleabi` / `arm-linux-musleabihf` / `aarch64-linux-musl` / `x86_64-linux-musl` | ELF32 LSB/MSB MIPS32r2 o32 soft-float, ARM EABI5 hard-float, ELF64 aarch64/x86-64; all static with no dynamic section |
 | OpenWrt apk (`scripts/make-apk.sh`) | ADB v3; installed with apk-tools 3.0.8 into a chroot, correct modes/dependency, 7 build variants / 8 packages |
 | LuCI apk (`scripts/make-luci-apk.sh`) | ADB v3, `noarch`, installs with `luci-base` + `anytls-zig`; `.lmo` byte-identical to LuCI `po2lmo` |
-| aarch64 throughput / latency / CPU / RSS | [docs/bench-aarch64.md](docs/bench-aarch64.md): 106–376 MB/s, 0.21–0.23 ms, 1.3–1.7 MB RSS |
+| aarch64 throughput / latency / CPU / RSS | [docs/bench-aarch64.md](docs/bench-aarch64.md): 106–376 MB/s, 0.21–0.23 ms, 1.3–1.7 MB RSS (Zig 0.15.1) |
+| x86-64 throughput / latency / CPU / RSS (Zig 0.17.0) | [docs/bench-x86_64.md](docs/bench-x86_64.md): 169–702 MB/s, 0.16–0.20 ms, 1.8–2.2 MB RSS; `ReleaseFast` reaches 0.85× the Go client's throughput at 0.81× its CPU |
 
 **Not executed:** running the cross-built binaries on real router hardware, or
 under QEMU. No device or user-mode QEMU was available in the test environment,

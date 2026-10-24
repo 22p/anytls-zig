@@ -73,11 +73,13 @@ AnyTLS 组帧工作仍然要自己实现；Zig 自带客户端已经完成完整
 
 ## 构建
 
-需要 Zig **0.15.1**。
+需要 Zig **0.17.0**。
 
-`zig build` 默认生成 **静态 musl** 的本机二进制。这与部署目标一致，同时避开
-Zig 0.15.1 原生 glibc 线程启动在部分主机上的 panic。需要时可用
-`-Dtarget=`/`-Dcpu=` 覆盖。
+`zig build` 默认生成 **静态 musl** 的本机二进制，与部署目标一致，也便于复现。
+需要时可用 `-Dtarget=`/`-Dcpu=` 覆盖。
+
+在 x86-64 上，0.17.0 的 `ReleaseFast` 比 `ReleaseSmall` 快约 4 倍（见
+[docs/bench-x86_64.md](docs/bench-x86_64.md)）；需要吞吐时请加 `-Doptimize=fast`。
 
 本机测试构建：
 
@@ -89,9 +91,9 @@ zig build -Doptimize=Debug
 静态交叉编译：
 
 ```sh
-zig build -Doptimize=ReleaseSmall -Dtarget=aarch64-linux-musl
-zig build -Doptimize=ReleaseSmall -Dtarget=arm-linux-musleabihf -Dcpu=cortex_a7-neon
-zig build -Doptimize=ReleaseSmall -Dtarget=mipsel-linux-musleabi -Dcpu=mips32r2
+zig build -Doptimize=ReleaseFast -Dtarget=aarch64-linux-musl
+zig build -Doptimize=ReleaseFast -Dtarget=arm-linux-musleabihf -Dcpu=cortex_a7-neon
+zig build -Doptimize=ReleaseFast -Dtarget=mipsel-linux-musleabi -Dcpu=mips32r2
 
 file zig-out/bin/anytls-zig
 readelf -h -l zig-out/bin/anytls-zig   # 无 INTERP、无 NEEDED
@@ -105,19 +107,18 @@ readelf -h -l zig-out/bin/anytls-zig   # 无 INTERP、无 NEEDED
 * 首次为新目标构建时会从源码编译 musl，在性能较弱的机器上可能需要数分钟；之后
   会命中缓存。
 * 等价的直接命令：
-  `zig build-exe src/main.zig -lc -OReleaseSmall -target <triple> -fstrip`
+  `zig build-exe src/main.zig -lc -OReleaseFast -target <triple> -fstrip`
 * 32 位 ARM 构建面向 ARMv7-A + VFPv4，关闭 NEON（`-Dcpu=cortex_a7-neon`），可运行在
   任意 ARMv7 硬浮点目标上；打包时同时生成 `arm_cortex-a7` 和
   `arm_cortex-a7_neon-vfpv4` 两个标签。
-* CI 会为 aarch64 同时产出三个版本（包名相同，按需选一个）：
-
-  | 文件名后缀 | 构建 | 体积 | 吞吐 |
-  |---|---|---:|---:|
-  | *（无）* | `ReleaseSmall`，通用 CPU | 372 KB | ~106 MB/s |
-  | `-aes` | `ReleaseSmall` + `aes+sha2` | 356 KB | ~160 MB/s |
-  | `-fast` | `ReleaseFast` + `aes+sha2` | 710 KB | ~376 MB/s |
-
-  实测方法见 [docs/bench-aarch64.md](docs/bench-aarch64.md)。
+* CI 每种架构只发布一个 **`ReleaseFast`** 二进制（不再有 `-aes`/`-fast` 变体）。
+  Zig 0.17 的 `ReleaseSmall` 加密代码生成会让 AES-GCM 慢约一倍，因此不再发布小体积
+  构建；代价是体积（MIPS32 约 2.1 MB、ARMv7 约 1.3 MB、aarch64 约 0.87 MB、
+  x86-64 约 1.00 MB）。aarch64 使用 `+aes+sha2`，x86-64 使用
+  `+aes+pclmul+avx`（要求 AES-NI、PCLMULQDQ、AVX，约 2011 年后的 CPU；用
+  `baseline` 会慢约一倍）。实测见
+  [docs/bench-x86_64.md](docs/bench-x86_64.md)（0.17.0）与
+  [docs/bench-aarch64.md](docs/bench-aarch64.md)（0.15.1）。
 * `scripts/make-apk.sh` 可把已构建的二进制打成 OpenWrt apk；CI 会为所有目标生成。
 * `scripts/make-luci-apk.sh` 生成与架构无关的 `luci-app-anytls-zig` apk，并在打包时
   把 `po/zh_Hans` 编译成 `.lmo`（与 LuCI 官方 `po2lmo` 输出逐字节一致）。
@@ -306,7 +307,8 @@ RSS、2 个线程；10 个并发会话加 10 个活跃 stream 时约 2.9 MB（�
 | 交叉编译 `mipsel-linux-musleabi` / `mips-linux-musleabi` / `arm-linux-musleabihf` / `aarch64-linux-musl` / `x86_64-linux-musl` | ELF32 LSB/MSB MIPS32r2 o32 软浮点、ARM EABI5 硬浮点、ELF64 aarch64/x86-64，均为静态链接且无动态段 |
 | OpenWrt apk（`scripts/make-apk.sh`） | ADB v3；用 apk-tools 3.0.8 安装到 chroot 验证，权限与依赖正确，覆盖 7 个构建变体 / 8 个包 |
 | LuCI apk（`scripts/make-luci-apk.sh`） | ADB v3、`noarch`，可随 `luci-base` + `anytls-zig` 安装；`.lmo` 与官方 `po2lmo` 输出逐字节一致 |
-| aarch64 吞吐 / 延迟 / CPU / RSS | [docs/bench-aarch64.md](docs/bench-aarch64.md)：106–376 MB/s、0.21–0.23 ms、1.3–1.7 MB RSS |
+| aarch64 吞吐 / 延迟 / CPU / RSS | [docs/bench-aarch64.md](docs/bench-aarch64.md)：106–376 MB/s、0.21–0.23 ms、1.3–1.7 MB RSS（Zig 0.15.1） |
+| x86-64 吞吐 / 延迟 / CPU / RSS（Zig 0.17.0） | [docs/bench-x86_64.md](docs/bench-x86_64.md)：169–702 MB/s、0.16–0.20 ms、1.8–2.2 MB RSS；`ReleaseFast` 吞吐为 Go 客户端的 0.85 倍，CPU 为 0.81 倍 |
 
 **未执行：** 在真实路由器硬件或 QEMU 上运行交叉编译的二进制。测试环境没有设备
 和用户态 QEMU，因此目标架构上的运行时行为未经验证；只验证了 ELF/ABI 属性以及

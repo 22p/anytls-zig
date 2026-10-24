@@ -1,30 +1,29 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    // Default to static musl even for the host build: Zig 0.15.1's native
-    // glibc thread startup is broken on some hosts, and static musl matches
-    // the deployment target. Override with -Dtarget=... when needed.
+    // Default to static musl even for the host build: it matches the
+    // deployment target and keeps host builds reproducible. Override with
+    // -Dtarget=... when needed.
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .musl } });
     const optimize = b.option(
-        std.builtin.OptimizeMode,
+        std.lang.Optimize,
         "optimize",
-        "Optimization mode (default: ReleaseSmall)",
-    ) orelse .ReleaseSmall;
+        "Optimization mode (default: small)",
+    ) orelse .small;
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
-        .strip = optimize != .Debug,
+        .strip = optimize != .debug,
         // Release builds get no unwind metadata (saves ~25 KB on MIPS).
-        .unwind_tables = if (optimize == .Debug) null else .none,
+        .unwind_tables = if (optimize == .debug) null else .none,
     });
     const exe = b.addExecutable(.{ .name = "anytls-zig", .root_module = mod });
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
-    if (b.args) |args| run_cmd.addArgs(args);
     const run_step = b.step("run", "Run the client");
     run_step.dependOn(&run_cmd.step);
 

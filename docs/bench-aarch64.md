@@ -1,8 +1,18 @@
 # aarch64 performance
 
-Three aarch64 builds are published from the same source: `ReleaseSmall`
+> **Superseded.** CI now publishes a single `ReleaseFast` binary per
+> architecture. The three variants below were measured with Zig 0.15.1; under
+> 0.17.0 the `ReleaseSmall` crypto path is roughly twice as slow (see
+> [bench-x86_64.md](bench-x86_64.md)), which is why the small variants were
+> dropped.
+
+Three aarch64 builds were compared from the same source: `ReleaseSmall`
 (generic), `ReleaseSmall` with `+aes+sha2`, and `ReleaseFast` with `+aes+sha2`.
-The table below shows why all three exist.
+The table below shows why all three existed.
+
+The client has since been ported to 0.17.0; aarch64 has not been re-measured
+under 0.17.0. See [bench-x86_64.md](bench-x86_64.md) for the 0.15.1/0.17.0
+comparison.
 
 Loopback measurements of the Zig client and the reference Go client, both
 talking to an unmodified `anytls-go 0.0.13` server. The point is to quantify the

@@ -25,7 +25,7 @@ pub fn setLevel(l: Level) void {
 }
 
 pub fn enabled(l: Level) bool {
-    return @intFromEnum(l) <= @intFromEnum(current);
+    return @backingInt(l) <= @backingInt(current);
 }
 
 fn emit(comptime lvl: Level, comptime fmt: []const u8, args: anytype) void {

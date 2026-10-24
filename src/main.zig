@@ -3,7 +3,8 @@
 
 const std = @import("std");
 const posix = std.posix;
-const net = std.net;
+const IpAddress = std.Io.net.IpAddress;
+const sockaddr = @import("sockaddr.zig");
 const anytls = @import("anytls.zig");
 const socks5 = @import("socks5.zig");
 const config = @import("config.zig");
@@ -14,7 +15,7 @@ const version = "0.1.0";
 
 var stop_flag = std.atomic.Value(bool).init(false);
 
-fn onSignal(_: c_int) callconv(.c) void {
+fn onSignal(_: posix.SIG) callconv(.c) void {
     stop_flag.store(true, .release);
 }
 
@@ -74,11 +75,20 @@ fn fatalConfig(path: []const u8, diag: *const toml.Diag, err: anyerror) noreturn
     std.process.exit(1);
 }
 
-pub fn main() void {
+pub fn main(init: std.process.Init) void {
     const alloc = std.heap.c_allocator;
+    const io = init.io;
     installSignalHandlers();
 
-    const argv = std.process.argsAlloc(alloc) catch fatal("cannot read arguments", .{});
+    var argv_buf: [64][]const u8 = undefined;
+    var argc: usize = 0;
+    var arg_it = init.minimal.args.iterate();
+    while (arg_it.next()) |arg| {
+        if (argc == argv_buf.len) break;
+        argv_buf[argc] = arg;
+        argc += 1;
+    }
+    const argv = argv_buf[0..argc];
 
     var cli: config.Overrides = .{};
     var config_path: ?[]const u8 = null;
@@ -96,7 +106,7 @@ pub fn main() void {
 
     var from_file: config.Overrides = .{};
     if (config_path) |path| {
-        const text = std.fs.cwd().readFileAlloc(alloc, path, 256 * 1024) catch |e|
+        const text = std.Io.Dir.cwd().readFileAlloc(io, path, alloc, .limited(256 * 1024)) catch |e|
             fatal("cannot read config {s}: {s}", .{ path, @errorName(e) });
         var diag: toml.Diag = .{};
         // The table's arena is intentionally kept for the process lifetime:
@@ -113,7 +123,7 @@ pub fn main() void {
 
     var pw: []const u8 = undefined;
     switch (cfg.password) {
-        .none => pw = std.process.getEnvVarOwned(alloc, "ANYTLS_PASSWORD") catch
+        .none => pw = init.environ_map.get("ANYTLS_PASSWORD") orelse
             fatal("missing password (-p, [server] password or ANYTLS_PASSWORD)", .{}),
         .literal => |p| pw = p,
     }
@@ -130,9 +140,9 @@ pub fn main() void {
     var bundle: ?*std.crypto.Certificate.Bundle = null;
     if (!cfg.insecure) {
         const b = alloc.create(std.crypto.Certificate.Bundle) catch fatal("out of memory", .{});
-        b.* = .{};
+        b.* = .empty;
         if (cfg.ca) |p| {
-            loadCa(alloc, b, p) catch fatal("cannot load CA bundle: {s}", .{p});
+            loadCa(io, alloc, b, p) catch fatal("cannot load CA bundle: {s}", .{p});
         } else {
             const defaults = [_][]const u8{
                 "/etc/ssl/certs/ca-certificates.crt",
@@ -142,7 +152,7 @@ pub fn main() void {
             };
             var loaded = false;
             for (defaults) |p| {
-                if (loadCa(alloc, b, p)) |_| {
+                if (loadCa(io, alloc, b, p)) |_| {
                     loaded = true;
                     break;
                 } else |_| {}
@@ -157,13 +167,14 @@ pub fn main() void {
     }
 
     const listen_hp = splitHostPort(cfg.listen, 1080) catch fatal("bad listen address: {s}", .{cfg.listen});
-    const listen_addr = resolveOne(alloc, listen_hp.host, listen_hp.port) catch
+    const listen_addr = resolveOne(io, alloc, listen_hp.host, listen_hp.port) catch
         fatal("cannot resolve listen address: {s}", .{cfg.listen});
     const listen_fd = makeListener(listen_addr, 128) catch |e|
         fatal("cannot listen on {s}: {s}", .{ cfg.listen, @errorName(e) });
-    defer posix.close(listen_fd);
+    defer _ = std.c.close(listen_fd);
 
     const client = anytls.Client.init(alloc, .{
+        .io = io,
         .host = hp.host,
         .port = hp.port,
         .sni = sni,
@@ -194,19 +205,22 @@ pub fn main() void {
         _ = posix.poll(&fds, 500) catch |e| fatal("poll failed: {s}", .{@errorName(e)});
         if (fds[0].revents == 0) continue;
 
-        const fd = posix.accept(listen_fd, null, null, posix.SOCK.CLOEXEC) catch |e| {
+        const rc = std.c.accept(listen_fd, null, null);
+        if (rc < 0) {
             if (stop_flag.load(.acquire)) break;
-            log.warn("accept failed: {s}", .{@errorName(e)});
+            if (sockaddr.errno() == .INTR) continue;
+            log.warn("accept failed: errno {d}", .{@backingInt(sockaddr.errno())});
             continue;
-        };
+        }
+        const conn = sockaddr.makeStream(@intCast(rc), listen_addr);
         log.debug("accepted connection", .{});
         const t = std.Thread.spawn(
             .{ .stack_size = 512 * 1024 },
             socks5.handle,
-            .{ client, fd, cfg.half_close_wait_s * std.time.ns_per_s },
+            .{ client, io, conn, cfg.half_close_wait_s * std.time.ns_per_s },
         ) catch |e| {
             log.err("cannot spawn connection thread: {s}", .{@errorName(e)});
-            posix.close(fd);
+            conn.close(io);
             continue;
         };
         t.detach();
@@ -216,37 +230,55 @@ pub fn main() void {
     client.deinit();
 }
 
-fn makeListener(addr: net.Address, backlog: u31) !posix.socket_t {
-    const fd = try posix.socket(
-        addr.any.family,
-        posix.SOCK.STREAM | posix.SOCK.CLOEXEC,
-        posix.IPPROTO.TCP,
-    );
-    errdefer posix.close(fd);
+fn makeListener(addr: IpAddress, backlog: u31) !posix.socket_t {
+    const rc = std.c.socket(sockaddr.family(addr), posix.SOCK.STREAM | posix.SOCK.CLOEXEC, posix.IPPROTO.TCP);
+    if (rc < 0) return error.SocketFailed;
+    const fd: posix.socket_t = @intCast(rc);
+    errdefer _ = std.c.close(fd);
+
     // SO_REUSEADDR only: SO_REUSEPORT would let a second instance silently
     // share the SOCKS port instead of failing to bind.
     const one: c_int = 1;
     posix.setsockopt(fd, posix.SOL.SOCKET, posix.SO.REUSEADDR, std.mem.asBytes(&one)) catch {};
-    try posix.bind(fd, &addr.any, addr.getOsSockLen());
-    try posix.listen(fd, backlog);
+
+    var storage: posix.sockaddr.storage = undefined;
+    const len = sockaddr.toSockaddr(addr, &storage);
+    if (std.c.bind(fd, @ptrCast(&storage), len) != 0) {
+        return switch (sockaddr.errno()) {
+            .ADDRINUSE => error.AddressInUse,
+            .ACCES => error.AccessDenied,
+            else => error.BindFailed,
+        };
+    }
+    if (std.c.listen(fd, backlog) != 0) return error.ListenFailed;
     return fd;
 }
 
-fn loadCa(alloc: std.mem.Allocator, bundle: *std.crypto.Certificate.Bundle, path: []const u8) !void {
-    var abs_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const abs = std.fs.cwd().realpath(path, &abs_buf) catch return error.FileNotFound;
-    try bundle.addCertsFromFilePathAbsolute(alloc, abs);
+fn loadCa(io: std.Io, alloc: std.mem.Allocator, bundle: *std.crypto.Certificate.Bundle, path: []const u8) !void {
+    const abs = std.Io.Dir.cwd().realPathFileAlloc(io, path, alloc) catch return error.FileNotFound;
+    defer alloc.free(abs);
+    try bundle.addCertsFromFilePathAbsolute(alloc, io, std.Io.Timestamp.now(io, .real), abs);
 }
 
-fn resolveOne(alloc: std.mem.Allocator, host: []const u8, port: u16) !net.Address {
+fn resolveOne(io: std.Io, alloc: std.mem.Allocator, host: []const u8, port: u16) !IpAddress {
+    _ = alloc;
     if (host.len == 0 or std.mem.eql(u8, host, "*")) {
-        return net.Address.parseIp("0.0.0.0", port);
+        return .{ .ip4 = .{ .bytes = .{ 0, 0, 0, 0 }, .port = port } };
     }
-    if (net.Address.parseIp(host, port)) |a| return a else |_| {}
-    const list = try net.getAddressList(alloc, host, port);
-    defer list.deinit();
-    if (list.addrs.len == 0) return error.UnknownHostName;
-    return list.addrs[0];
+    if (IpAddress.parse(host, port)) |a| return a else |_| {}
+
+    // Not an IP literal: ask the system resolver.
+    const host_name = std.Io.net.HostName.init(host) catch return error.UnknownHostName;
+    var results: [8]std.Io.net.HostName.LookupResult = undefined;
+    var queue: std.Io.Queue(std.Io.net.HostName.LookupResult) = .init(&results);
+    try host_name.lookup(io, &queue, .{ .port = port });
+    while (queue.getOne(io)) |item| {
+        switch (item) {
+            .address => |a| return a,
+            .canonical_name => {},
+        }
+    } else |_| {}
+    return error.UnknownHostName;
 }
 
 const HostPort = struct { host: []const u8, port: u16 };
