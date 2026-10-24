@@ -109,15 +109,19 @@ readelf -h -l zig-out/bin/anytls-zig   # 无 INTERP、无 NEEDED
 * 32 位 ARM 构建面向 ARMv7-A + VFPv4，关闭 NEON（`-Dcpu=cortex_a7-neon`），可运行在
   任意 ARMv7 硬浮点目标上；打包时同时生成 `arm_cortex-a7` 和
   `arm_cortex-a7_neon-vfpv4` 两个标签。
-* CI 会为 aarch64 同时产出三个版本（包名相同，按需选一个）：
+* CI 每种架构产出两个构建——`ReleaseSmall`（无后缀）和 `ReleaseFast`
+  （`-fast`）——x86-64 只发布 `ReleaseFast`。体积（Zig 0.15.2，已 strip）：
 
-  | 文件名后缀 | 构建 | 体积 | 吞吐 |
-  |---|---|---:|---:|
-  | *（无）* | `ReleaseSmall`，通用 CPU | 372 KB | ~106 MB/s |
-  | `-aes` | `ReleaseSmall` + `aes+sha2` | 356 KB | ~160 MB/s |
-  | `-fast` | `ReleaseFast` + `aes+sha2` | 710 KB | ~376 MB/s |
+  | 架构 | `ReleaseSmall` | `ReleaseFast` |
+  |---|---:|---:|
+  | aarch64（fast 用 `+aes+sha2`） | 372 KB | 712 KB |
+  | armv7 | 581 KB | 997 KB |
+  | mips / mipsel | 841 KB | 1.68 MB |
+  | x86-64（fast 用 `+aes+pclmul+avx`） | – | 788 KB |
 
-  实测方法见 [docs/bench-aarch64.md](docs/bench-aarch64.md)。
+  flash 紧张的路由器用 small；QEMU 下 fast 约快 1.2 倍（MIPS）到 1.5 倍
+  （ARMv7），x86-64 上约快 3 倍。实测见
+  [docs/bench-aarch64.md](docs/bench-aarch64.md)。
 * `scripts/make-apk.sh` 可把已构建的二进制打成 OpenWrt apk；CI 会为所有目标生成。
 * `scripts/make-luci-apk.sh` 生成与架构无关的 `luci-app-anytls-zig` apk，并在打包时
   把 `po/zh_Hans` 编译成 `.lmo`（与 LuCI 官方 `po2lmo` 输出逐字节一致）。

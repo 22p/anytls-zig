@@ -120,15 +120,21 @@ Notes:
 * The 32-bit ARM build targets ARMv7-A with VFPv4 but without NEON
   (`-Dcpu=cortex_a7-neon`), so it runs on any ARMv7 hard-float target. It is
   packaged under both `arm_cortex-a7` and `arm_cortex-a7_neon-vfpv4`.
-* CI publishes three aarch64 builds (same package name, pick one):
+* CI publishes two builds per architecture — `ReleaseSmall` (no suffix) and
+  `ReleaseFast` (`-fast`) — except x86-64, which ships only `ReleaseFast`.
+  Sizes (Zig 0.15.2, stripped):
 
-  | File suffix | Build | Size | Throughput |
-  |---|---|---:|---:|
-  | *(none)* | `ReleaseSmall`, generic CPU | 372 KB | ~106 MB/s |
-  | `-aes` | `ReleaseSmall`, `+aes+sha2` | 356 KB | ~160 MB/s |
-  | `-fast` | `ReleaseFast`, `+aes+sha2` | 710 KB | ~376 MB/s |
+  | Architecture | `ReleaseSmall` | `ReleaseFast` |
+  |---|---:|---:|
+  | aarch64 (fast: `+aes+sha2`) | 372 KB | 712 KB |
+  | armv7 | 581 KB | 997 KB |
+  | mips / mipsel | 841 KB | 1.68 MB |
+  | x86-64 (fast: `+aes+pclmul+avx`) | – | 788 KB |
 
-  Measurements: [docs/bench-aarch64.md](docs/bench-aarch64.md).
+  Use the small build on flash-constrained routers; under QEMU the fast build
+  is roughly 1.2× (MIPS) to 1.5× (ARMv7) quicker, and on x86-64 it is about
+  3× quicker than the small build. Measurements:
+  [docs/bench-aarch64.md](docs/bench-aarch64.md).
 * `scripts/make-apk.sh` wraps a built binary into an OpenWrt apk; the CI
   workflow builds apks for all targets.
 * `scripts/make-luci-apk.sh` builds the arch-independent `luci-app-anytls-zig`
