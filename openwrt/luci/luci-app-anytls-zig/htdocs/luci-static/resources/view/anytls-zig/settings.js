@@ -25,9 +25,15 @@ return view.extend({
 		o.description = _('Use 0.0.0.0:1080 to serve the LAN; the default listens on loopback only.');
 
 		o = s.option(form.Flag, 'pac_enabled', _('Serve PAC file'),
-			_('Writes /www/anytls-zig.pac, served as http://<LAN-IP>/anytls-zig.pac. The proxy address is generated from the LAN address and the SOCKS5 port above, so set listen to 0.0.0.0:1080 for LAN clients.'));
+			_('The service writes /www/anytls-zig.pac. The proxy line uses the LAN address and the SOCKS5 port from the listen option; set listen to 0.0.0.0:1080 so LAN clients can reach it.'));
 		o.default = '0';
 		o.rmempty = false;
+
+		o = s.option(form.DummyValue, '_pac_url', _('PAC URL'));
+		o.cfgvalue = function() {
+			return 'http://' + window.location.host + '/anytls-zig.pac';
+		};
+		o.description = _('Open this URL on the client device; the file is created when the service starts.');
 
 		o = s.option(form.DynamicList, 'pac_bypass', _('PAC bypass domains'),
 			_('Extra domains that should go DIRECT, subdomains included. The built-in list already covers common Chinese sites.'));

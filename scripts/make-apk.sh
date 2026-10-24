@@ -40,15 +40,20 @@ here=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d /tmp/anytls-apk.XXXXXX)
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
-mkdir -p "$tmp/usr/bin" "$tmp/etc/init.d" "$tmp/etc/config" "$tmp/etc/anytls-zig"
+mkdir -p "$tmp/usr/bin" "$tmp/etc/init.d" "$tmp/etc/config" "$tmp/etc/anytls-zig" \
+	"$tmp/usr/libexec/anytls-zig" "$tmp/usr/share/anytls-zig"
 cp "$binary" "$tmp/usr/bin/anytls-zig"
 cp "$here/openwrt/files/anytls-zig.init" "$tmp/etc/init.d/anytls-zig"
 cp "$here/openwrt/files/anytls-zig.config" "$tmp/etc/config/anytls-zig"
 cp "$here/config/anytls-zig.toml" "$tmp/etc/anytls-zig/config.toml.example"
+cp "$here/openwrt/files/anytls-zig-pac" "$tmp/usr/libexec/anytls-zig/pac"
+cp "$here/openwrt/files/china-domains.txt" "$tmp/usr/share/anytls-zig/china-domains.txt"
 
-chmod 755 "$tmp/usr/bin/anytls-zig" "$tmp/etc/init.d/anytls-zig"
+chmod 755 "$tmp/usr/bin/anytls-zig" "$tmp/etc/init.d/anytls-zig" \
+	"$tmp/usr/libexec/anytls-zig/pac"
 chmod 600 "$tmp/etc/config/anytls-zig"
-chmod 644 "$tmp/etc/anytls-zig/config.toml.example"
+chmod 644 "$tmp/etc/anytls-zig/config.toml.example" \
+	"$tmp/usr/share/anytls-zig/china-domains.txt"
 # ADB records mtimes; normalize them so rebuilds are identical.
 find "$tmp" -exec touch -h -d @0 {} +
 

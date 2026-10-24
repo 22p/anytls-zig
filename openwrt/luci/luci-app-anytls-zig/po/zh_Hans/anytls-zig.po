@@ -108,11 +108,17 @@ msgstr "调试"
 msgid "Serve PAC file"
 msgstr "提供 PAC 文件"
 
-msgid "Writes /www/anytls-zig.pac, served as http://<LAN-IP>/anytls-zig.pac. The proxy address is generated from the LAN address and the SOCKS5 port above, so set listen to 0.0.0.0:1080 for LAN clients."
-msgstr "生成 /www/anytls-zig.pac，可通过 http://<LAN-IP>/anytls-zig.pac 访问。代理地址由 LAN 地址和上面的 SOCKS5 端口自动生成；要让局域网设备使用，请把监听地址设为 0.0.0.0:1080。"
+msgid "The service writes /www/anytls-zig.pac. The proxy line uses the LAN address and the SOCKS5 port from the listen option; set listen to 0.0.0.0:1080 so LAN clients can reach it."
+msgstr "服务会生成 /www/anytls-zig.pac，代理地址使用 LAN 地址和监听选项里的 SOCKS5 端口；要让局域网设备使用，请把监听地址设为 0.0.0.0:1080。"
 
 msgid "PAC bypass domains"
 msgstr "PAC 直连域名"
 
 msgid "Extra domains that should go DIRECT, subdomains included. The built-in list already covers common Chinese sites."
 msgstr "额外走直连的域名（包含子域名）。内置列表已覆盖常见中国站点。"
+
+msgid "PAC URL"
+msgstr "PAC 地址"
+
+msgid "Open this URL on the client device; the file is created when the service starts."
+msgstr "在客户端设备上打开此地址；文件会在服务启动时生成。"

@@ -279,6 +279,11 @@ uci commit anytls-zig
 内置列表只是常见站点样本，不是完整的中国域名列表；每行一个后缀。直接修改
 安装目录里的文件可能在升级时被覆盖，长期追加请用 `pac_bypass`。
 
+LuCI 里会显示 PAC 地址（按你打开 LuCI 时使用的地址生成）。若返回 404，先确认
+服务在运行（`logread -e anytls-zig`）且 `/www/anytls-zig.pac` 存在；生成脚本位于
+`/usr/libexec/anytls-zig/pac`。注意 v0.1.4 的 apk 漏装了生成脚本和域名列表，
+请确认安装的包确实包含这两个文件。
+
 ## 体积
 
 在 32 位 MIPS 构建（`mipsel-linux-musleabi`、`-mcpu=mips32r2`）、静态 musl、

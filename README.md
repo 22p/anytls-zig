@@ -305,6 +305,12 @@ The built-in list is a sample rather than a complete China list; one suffix per
 line. Edits to the installed file may be overwritten by package upgrades, so put
 permanent additions in `pac_bypass`.
 
+The PAC URL is shown in LuCI (built from the address you opened LuCI with). If
+it returns 404, check that the service is running (`logread -e anytls-zig`) and
+that `/www/anytls-zig.pac` exists; the generator lives at
+`/usr/libexec/anytls-zig/pac`. Note that v0.1.4 apks accidentally omitted the
+generator and the domain list; make sure the installed package ships both files.
+
 ## Size
 
 Measured on the 32-bit MIPS build (`mipsel-linux-musleabi`, `-mcpu=mips32r2`),
