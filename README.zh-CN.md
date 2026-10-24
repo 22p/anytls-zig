@@ -110,6 +110,8 @@ readelf -h -l zig-out/bin/anytls-zig   # 无 INTERP、无 NEEDED
   `-Doptimize=ReleaseFast`（约 3.5 倍，体积翻倍）。实测数据与取舍见
   [docs/bench-aarch64.md](docs/bench-aarch64.md)。
 * `scripts/make-apk.sh` 可把已构建的二进制打成 OpenWrt apk；CI 会为所有目标生成。
+* `scripts/make-luci-apk.sh` 生成与架构无关的 `luci-app-anytls-zig` apk，并在打包时
+  把 `po/zh_Hans` 编译成 `.lmo`（与 LuCI 官方 `po2lmo` 输出逐字节一致）。
 
 ## 配置
 
@@ -180,9 +182,16 @@ anytls-zig -s 'anytls://password@example.com:443?sni=example.com'
 apk add --allow-untrusted anytls-zig_0.1.0-r1_<arch>.apk
 ```
 
-   该包是 apk-tools 2.x 使用的 tar.gz（apk v2）格式（OpenWrt 24.10 +
+   如果需要 Web 界面，再安装与架构无关的 LuCI 包：
+
+```sh
+apk add --allow-untrusted luci-app-anytls-zig_0.1.0-r1_all.apk
+```
+
+   两者都是 apk-tools 2.x 的 tar.gz（apk v2）格式（OpenWrt 24.10 +
    `CONFIG_USE_APK`）；使用 apk-tools 3 的镜像请用 OpenWrt SDK 和
-   `openwrt/Makefile` 构建。也可以直接把 `zig-out/bin/anytls-zig` 复制到
+   `openwrt/`、`openwrt/luci/` 构建。包未签名：用镜像信任的密钥签名，或使用
+   `--allow-untrusted`。也可以直接把 `zig-out/bin/anytls-zig` 复制到
    `/usr/bin/anytls-zig`，再把 `openwrt/files/` 中的文件放到对应位置。
 
 2. 安装 CA 证书包：`opkg install ca-bundle`（或 `apk add ca-bundle`）。
@@ -217,6 +226,9 @@ logread -e anytls-zig
   `package/luci-app-anytls-zig/`，并调整 `luci.mk` 的 include 路径）；
 * 在 `make menuconfig` 中选中 `luci-app-anytls-zig`（依赖 `anytls-zig`）；
 * 页面位于 **服务 → AnyTLS Zig**，提供英文与简体中文（`zh_Hans`）。
+
+CI 会生成 `luci-app-anytls-zig_<version>_all.apk`；翻译在打包时编译为 `.lmo`，
+不需要额外的 i18n 包。
 
 表单覆盖监听地址、服务器/SNI、密码、CA 证书、校验开关、超时、会话池、stream
 上限和日志级别。密码保存在 `/etc/config/anytls-zig`，请把该文件权限设为 600。
@@ -275,6 +287,7 @@ RSS、2 个线程；10 个并发会话加 10 个活跃 stream 时约 2.9 MB（�
 | 日志凭据泄漏 | 所有日志中均无密码 |
 | 交叉编译 `mipsel-linux-musleabi` / `mips-linux-musleabi` / `arm-linux-musleabihf` / `aarch64-linux-musl` / `x86_64-linux-musl` | ELF32 LSB/MSB MIPS32r2 o32 软浮点、ARM EABI5 硬浮点、ELF64 aarch64/x86-64，均为静态链接且无动态段 |
 | OpenWrt apk（`scripts/make-apk.sh`） | 可复现（重建 SHA-256 相同）、`.PKGINFO` 与权限正确、覆盖 5 种架构 |
+| LuCI apk（`scripts/make-luci-apk.sh`） | 可复现；包含 JS、菜单、ACL 与 `.lmo`，其 `.lmo` 与官方 `po2lmo` 输出逐字节一致 |
 | aarch64 吞吐 / 延迟 / CPU / RSS | [docs/bench-aarch64.md](docs/bench-aarch64.md)：106–376 MB/s、0.21–0.23 ms、1.3–1.7 MB RSS |
 
 **未执行：** 在真实路由器硬件或 QEMU 上运行交叉编译的二进制。测试环境没有设备

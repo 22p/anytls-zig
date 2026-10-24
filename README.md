@@ -122,6 +122,8 @@ Notes:
   Numbers and trade-offs: [docs/bench-aarch64.md](docs/bench-aarch64.md).
 * `scripts/make-apk.sh` wraps a built binary into an OpenWrt apk; the CI
   workflow builds apks for all targets.
+* `scripts/make-luci-apk.sh` builds the arch-independent `luci-app-anytls-zig`
+  apk, compiling `po/zh_Hans` into `.lmo` (byte-identical to LuCI's `po2lmo`).
 
 ## Configuration
 
@@ -193,12 +195,18 @@ password comes from the TOML or UCI file, keep that file readable by root only.
 apk add --allow-untrusted anytls-zig_0.1.0-r1_<arch>.apk
 ```
 
-   This is the tar.gz apk v2 format used by apk-tools 2.x (OpenWrt 24.10 with
-   `CONFIG_USE_APK`); images with apk-tools 3 should build the package with the
-   OpenWrt SDK from `openwrt/Makefile`. The package is unsigned: sign it with
-   the key trusted by the image, or use `--allow-untrusted`. Alternatively copy
-   `zig-out/bin/anytls-zig` to `/usr/bin/anytls-zig` and the files from
-   `openwrt/files/` into place.
+   For the web UI install the arch-independent LuCI package as well:
+
+```sh
+apk add --allow-untrusted luci-app-anytls-zig_0.1.0-r1_all.apk
+```
+
+   Both are tar.gz apk v2 packages (apk-tools 2.x, OpenWrt 24.10 with
+   `CONFIG_USE_APK`); images with apk-tools 3 should build them with the
+   OpenWrt SDK from `openwrt/` and `openwrt/luci/`. The packages are unsigned:
+   sign them with the key trusted by the image, or use `--allow-untrusted`.
+   Alternatively copy `zig-out/bin/anytls-zig` to `/usr/bin/anytls-zig` and the
+   files from `openwrt/files/` into place.
 
 2. Install the CA bundle: `opkg install ca-bundle` (or `apk add ca-bundle`).
 3. Set the password and protect the file:
@@ -236,6 +244,9 @@ above:
 * select `luci-app-anytls-zig` in `make menuconfig` (depends on `anytls-zig`),
 * the page appears under **Services → AnyTLS Zig** in English and Simplified
   Chinese (`zh_Hans`).
+
+CI builds this as `luci-app-anytls-zig_<version>_all.apk`; the translation is
+compiled to `.lmo` at package time, so no extra i18n package is needed.
 
 The form covers the listen address, server/SNI, password, CA bundle,
 verification switch, timeouts, pool sizes, stream limit and log level. The
@@ -296,6 +307,7 @@ a locally generated CA and a `localhost` certificate, and a local HTTP origin.
 | Credential leakage in logs | password absent from all logs |
 | Cross-compile `mipsel-linux-musleabi` / `mips-linux-musleabi` / `arm-linux-musleabihf` / `aarch64-linux-musl` / `x86_64-linux-musl` | ELF32 LSB/MSB MIPS32r2 o32 soft-float, ARM EABI5 hard-float, ELF64 aarch64/x86-64; all static with no dynamic section |
 | OpenWrt apk (`scripts/make-apk.sh`) | reproducible (identical SHA-256 on rebuild), `.PKGINFO` + correct modes, 5 architectures |
+| LuCI apk (`scripts/make-luci-apk.sh`) | reproducible; contains JS, menu, ACL and `.lmo` byte-identical to LuCI `po2lmo` output |
 | aarch64 throughput / latency / CPU / RSS | [docs/bench-aarch64.md](docs/bench-aarch64.md): 106–376 MB/s, 0.21–0.23 ms, 1.3–1.7 MB RSS |
 
 **Not executed:** running the cross-built binaries on real router hardware, or
