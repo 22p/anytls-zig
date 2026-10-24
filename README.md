@@ -122,7 +122,9 @@ Notes:
   `__sync_*` atomics through the kernel's `__kuser_cmpxchg` helper
   (`src/armv5_atomic.zig`), the same mechanism libgcc uses; OpenWrt ARMv5
   kernels keep `CONFIG_KUSER_HELPERS` enabled. This build is exercised under
-  qemu-arm (SOCKS, TLS 1.3, 10 MB transfer, concurrency).
+  qemu-arm (SOCKS, TLS 1.3, 10 MB transfer, concurrency). It is packaged under
+  two arch labels: `arm_arm926ej-s` (the OpenWrt feed arch) and `armel` (images
+  whose `apk --print-arch` reports `armel`).
 * ARM64 with the ARMv8 crypto extensions can use `-Dcpu=baseline+aes+sha2`
   (1.5× throughput) and/or `-Doptimize=ReleaseFast` (3.5×, at twice the size).
   Numbers and trade-offs: [docs/bench-aarch64.md](docs/bench-aarch64.md).
@@ -201,8 +203,13 @@ password comes from the TOML or UCI file, keep that file readable by root only.
 1. Install the client, either as a package built by CI:
 
 ```sh
-apk add --allow-untrusted anytls-zig_0.1.0-r1_<arch>.apk
+apk add --allow-untrusted anytls-zig_<version>_<arch>.apk
 ```
+
+   `<arch>` must match `apk --print-arch` (for example `mipsel_24kc`,
+   `arm_arm926ej-s`, `armel`). The armel build ships both `arm_arm926ej-s` and
+   `armel`; if the label still differs, `apk add --arch <arch>` overrides the
+   check.
 
    For the web UI install the arch-independent LuCI package as well:
 
@@ -316,7 +323,7 @@ a locally generated CA and a `localhost` certificate, and a local HTTP origin.
 | Credential leakage in logs | password absent from all logs |
 | Cross-compile `mipsel-linux-musleabi` / `mips-linux-musleabi` / `arm-linux-musleabihf` / `arm-linux-musleabi` / `aarch64-linux-musl` / `x86_64-linux-musl` | ELF32 LSB/MSB MIPS32r2 o32 soft-float, ARM EABI5 hard-float and ARMv5TE soft-float, ELF64 aarch64/x86-64; all static with no dynamic section |
 | armel (ARMv5TE) runtime | SOCKS5 + TLS 1.3 + 10 MB checksum + 4-way concurrency under qemu-arm |
-| OpenWrt apk (`scripts/make-apk.sh`) | ADB v3; installed with apk-tools 3.0.8 into a chroot, correct modes and dependency, 5 architectures |
+| OpenWrt apk (`scripts/make-apk.sh`) | ADB v3; installed with apk-tools 3.0.8 into a chroot, correct modes and dependency, 6 targets / 7 packages |
 | LuCI apk (`scripts/make-luci-apk.sh`) | ADB v3, `noarch`, installs with `luci-base` + `anytls-zig`; `.lmo` byte-identical to LuCI `po2lmo` |
 | aarch64 throughput / latency / CPU / RSS | [docs/bench-aarch64.md](docs/bench-aarch64.md): 106–376 MB/s, 0.21–0.23 ms, 1.3–1.7 MB RSS |
 

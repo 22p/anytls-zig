@@ -110,7 +110,9 @@ readelf -h -l zig-out/bin/anytls-zig   # 无 INTERP、无 NEEDED
 * ARMv5（`armel`，例如 ARM926）没有 LDREX/STREX。构建时通过内核的
   `__kuser_cmpxchg` 提供 `__sync_*` 原子操作（`src/armv5_atomic.zig`，与 libgcc 做法
   相同）；OpenWrt 的 ARMv5 内核默认保留 `CONFIG_KUSER_HELPERS`。该构建已在
-  qemu-arm 下做过 SOCKS、TLS 1.3、10 MB 传输和并发验证。
+  qemu-arm 下做过 SOCKS、TLS 1.3、10 MB 传输和并发验证。打包时会生成两个 arch
+  标签：`arm_arm926ej-s`（OpenWrt feed 的架构名）和 `armel`（`apk --print-arch`
+  为 armel 的镜像）。
 * 带 ARMv8 加密扩展的 ARM64 可加 `-Dcpu=baseline+aes+sha2`（吞吐约 1.5 倍）和/或
   `-Doptimize=ReleaseFast`（约 3.5 倍，体积翻倍）。实测数据与取舍见
   [docs/bench-aarch64.md](docs/bench-aarch64.md)。
@@ -187,8 +189,12 @@ anytls-zig -s 'anytls://password@example.com:443?sni=example.com'
 
 ```sh
 # CI 构建的 apk（未签名：用镜像信任的密钥签名，或允许未签名安装）
-apk add --allow-untrusted anytls-zig_0.1.0-r1_<arch>.apk
+apk add --allow-untrusted anytls-zig_<version>_<arch>.apk
 ```
+
+   `<arch>` 必须与 `apk --print-arch` 一致（例如 `mipsel_24kc`、
+   `arm_arm926ej-s`、`armel`）。armel 构建同时提供 `arm_arm926ej-s` 和 `armel`
+   两个标签；如果仍不一致，可用 `apk add --arch <arch>` 覆盖检查。
 
    如果需要 Web 界面，再安装与架构无关的 LuCI 包：
 
@@ -295,7 +301,7 @@ RSS、2 个线程；10 个并发会话加 10 个活跃 stream 时约 2.9 MB（�
 | 日志凭据泄漏 | 所有日志中均无密码 |
 | 交叉编译 `mipsel-linux-musleabi` / `mips-linux-musleabi` / `arm-linux-musleabihf` / `arm-linux-musleabi` / `aarch64-linux-musl` / `x86_64-linux-musl` | ELF32 LSB/MSB MIPS32r2 o32 软浮点、ARM EABI5 硬浮点与 ARMv5TE 软浮点、ELF64 aarch64/x86-64，均为静态链接且无动态段 |
 | armel（ARMv5TE）运行时 | 在 qemu-arm 下完成 SOCKS5 + TLS 1.3 + 10 MB 校验 + 4 并发 |
-| OpenWrt apk（`scripts/make-apk.sh`） | ADB v3；用 apk-tools 3.0.8 安装到 chroot 验证，权限与依赖正确，覆盖 5 种架构 |
+| OpenWrt apk（`scripts/make-apk.sh`） | ADB v3；用 apk-tools 3.0.8 安装到 chroot 验证，权限与依赖正确，覆盖 6 个目标 / 7 个包 |
 | LuCI apk（`scripts/make-luci-apk.sh`） | ADB v3、`noarch`，可随 `luci-base` + `anytls-zig` 安装；`.lmo` 与官方 `po2lmo` 输出逐字节一致 |
 | aarch64 吞吐 / 延迟 / CPU / RSS | [docs/bench-aarch64.md](docs/bench-aarch64.md)：106–376 MB/s、0.21–0.23 ms、1.3–1.7 MB RSS |
 

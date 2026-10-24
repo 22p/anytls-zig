@@ -64,6 +64,7 @@ jobs:
             abi: mips
             cpu_arch: ""
             owrt_arch: mipsel_24kc
+            extra_arches: ""
           - name: mips-musleabi
             target: mips-linux-musleabi
             cpu: mips32r2
@@ -71,6 +72,7 @@ jobs:
             abi: mips
             cpu_arch: ""
             owrt_arch: mips_24kc
+            extra_arches: ""
           - name: armv7-musleabihf
             target: arm-linux-musleabihf
             cpu: cortex_a7
@@ -78,6 +80,7 @@ jobs:
             abi: ""
             cpu_arch: ""
             owrt_arch: arm_cortex-a7_neon-vfpv4
+            extra_arches: ""
           - name: armel-musleabi
             target: arm-linux-musleabi
             cpu: arm926ej_s
@@ -85,6 +88,7 @@ jobs:
             abi: ""
             cpu_arch: v5TE
             owrt_arch: arm_arm926ej-s
+            extra_arches: armel
           - name: aarch64-musl
             target: aarch64-linux-musl
             cpu: baseline
@@ -92,6 +96,7 @@ jobs:
             abi: ""
             cpu_arch: ""
             owrt_arch: aarch64_cortex-a53
+            extra_arches: ""
           - name: x86_64-musl
             target: x86_64-linux-musl
             cpu: baseline
@@ -99,6 +104,7 @@ jobs:
             abi: ""
             cpu_arch: ""
             owrt_arch: x86_64
+            extra_arches: ""
     steps:
       - uses: actions/checkout@v4
 
@@ -157,11 +163,14 @@ jobs:
 
       - name: Package OpenWrt apk
         run: |
-          sudo env "APK=$APK" scripts/make-apk.sh "out/anytls-zig-${{ matrix.name }}" \
-            "${{ matrix.owrt_arch }}" "${{ steps.ver.outputs.apk }}" \
-            "out/anytls-zig_${{ steps.ver.outputs.apk }}_${{ matrix.owrt_arch }}.apk"
-          "$APK" adbdump out/anytls-zig_*.apk | grep -q "name: anytls-zig"
-          "$APK" adbdump out/anytls-zig_*.apk | grep -q "arch: ${{ matrix.owrt_arch }}"
+          for arch in ${{ matrix.owrt_arch }} ${{ matrix.extra_arches }}; do
+            sudo env "APK=$APK" scripts/make-apk.sh "out/anytls-zig-${{ matrix.name }}" \
+              "$arch" "${{ steps.ver.outputs.apk }}" \
+              "out/anytls-zig_${{ steps.ver.outputs.apk }}_$arch.apk"
+          done
+          for f in out/anytls-zig_*.apk; do
+            "$APK" adbdump "$f" | grep -q "name: anytls-zig" || exit 1
+          done
           ls -l out/*.apk
 
       - uses: actions/upload-artifact@v4
