@@ -13,8 +13,8 @@
 # ANYTLS_PAC_LIST, ANYTLS_PAC_OUT and ANYTLS_PAC_URL_FILE override the
 # defaults, and no uci access is attempted when ANYTLS_PAC_LISTEN is set.
 
-set -u
-
+# No `set -u`: OpenWrt's /lib/functions.sh dereferences shell variables such as
+# IPKG_INSTROOT that are not always set when the generator runs from procd.
 OUT=${ANYTLS_PAC_OUT:-/www/anytls-zig.pac}
 LIST=${ANYTLS_PAC_LIST:-/usr/share/anytls-zig/china-domains.txt}
 URL_FILE=${ANYTLS_PAC_URL_FILE:-/tmp/anytls-zig.pac.url}

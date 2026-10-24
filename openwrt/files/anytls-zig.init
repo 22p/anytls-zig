@@ -14,8 +14,12 @@ start_service() {
 	config_load anytls-zig
 
 	config_get_bool enabled    main enabled         0
+	config_get_bool pac_enabled main pac_enabled    0
+
 	if [ "$enabled" != "1" ]; then
 		rm -f "$PAC_FILE" "$PAC_URL"
+		[ "$pac_enabled" = "1" ] &&
+			logger -t anytls-zig "PAC skipped: the client is disabled"
 		return 0
 	fi
 
@@ -31,7 +35,19 @@ start_service() {
 	config_get half_close_wait main half_close_wait "3"
 	config_get log_level       main log_level       "info"
 	config_get_bool insecure   main insecure        0
-	config_get_bool pac_enabled main pac_enabled    0
+
+	if [ "$pac_enabled" = "1" ]; then
+		if [ ! -x "$PAC_GEN" ]; then
+			logger -t anytls-zig "PAC generator missing: $PAC_GEN (upgrade anytls-zig, not only luci-app-anytls-zig)"
+		elif pac_out=$("$PAC_GEN" 2>&1); then
+			logger -t anytls-zig "PAC written: $PAC_FILE"
+			[ -n "$pac_out" ] && logger -t anytls-zig "$pac_out"
+		else
+			logger -t anytls-zig "PAC generation failed: ${pac_out:-unknown error}"
+		fi
+	else
+		rm -f "$PAC_FILE" "$PAC_URL"
+	fi
 
 	[ -n "$server" ] || {
 		logger -t anytls-zig "server is not configured"
@@ -41,13 +57,6 @@ start_service() {
 		logger -t anytls-zig "password is not configured"
 		return 1
 	}
-
-	if [ "$pac_enabled" = "1" ]; then
-		[ -x "$PAC_GEN" ] && "$PAC_GEN" ||
-			logger -t anytls-zig "PAC generation failed"
-	else
-		rm -f "$PAC_FILE" "$PAC_URL"
-	fi
 
 	procd_open_instance
 	procd_set_param command "$PROG" \
