@@ -21,7 +21,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Zig ${{ env.ZIG_VERSION }}
         run: |
@@ -138,7 +138,7 @@ jobs:
             variant: "-v3"
             owrt_arch: x86_64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Zig ${{ env.ZIG_VERSION }}
         run: |
@@ -150,7 +150,7 @@ jobs:
           tar -xJf "$RUNNER_TEMP/zig.tar.xz" -C "$RUNNER_TEMP/zig" --strip-components=1
           echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.cache/zig
           key: zig-${{ env.ZIG_VERSION }}-${{ matrix.name }}-${{ hashFiles('build.zig', 'src/**/*.zig') }}
@@ -211,7 +211,7 @@ jobs:
           "$APK" adbdump out/anytls-zig_*_arm_cortex-a7_neon-vfpv4${{ matrix.variant }}.apk | grep -q "name: anytls-zig"
           ls -l out/*.apk
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: anytls-zig-${{ matrix.name }}
           path: |
@@ -223,7 +223,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install apk-tools 3
         run: |
@@ -264,7 +264,7 @@ jobs:
           "$APK" adbdump out/anytls-zig_*_arm_cortex-a7_neon-vfpv4${{ matrix.variant }}.apk | grep -q "name: anytls-zig"
           ls -l out/*.apk
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: luci-app-anytls-zig
           path: out/luci-app-anytls-zig_*.apk
@@ -277,9 +277,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: release
           merge-multiple: true
