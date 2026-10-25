@@ -1,12 +1,12 @@
 # anytls-zig
 
-A small AnyTLS client in Zig for OpenWrt and embedded Linux. SOCKS5 in,
+A small AnyTLS client in Zig for OpenWrt and embedded Linux. SOCKS5/HTTP in,
 AnyTLS protocol v2 out, TLS 1.3, no Go/JVM/runtime, no garbage collector,
 single statically linked ELF. Options come from CLI flags, a TOML file, or
 UCI/LuCI on OpenWrt.
 
 ```
-SOCKS5 client ──► stream (mux) ──► session ──► TLS 1.3 ──► AnyTLS server ──► target
+SOCKS5/HTTP client ──► stream (mux) ──► session ──► TLS 1.3 ──► AnyTLS server ──► target
 ```
 
 [中文文档](README.zh-CN.md)
@@ -248,8 +248,9 @@ chmod 600 /etc/config/anytls-zig
 logread -e anytls-zig
 ```
 
-5. Point LAN clients at `192.168.1.1:1080` (SOCKS5), or use it as an upstream
-   for a transparent-proxy tool. The default `127.0.0.1:1080` is loopback only.
+5. Point LAN clients at `192.168.1.1:1080` (SOCKS5 or HTTP proxy), or use it as
+   an upstream for a transparent-proxy tool. The default `127.0.0.1:1080` is
+   loopback only.
 
 The package Makefile in `openwrt/` expects the repository to be placed at
 `package/anytls-zig/` and `ZIG=/path/to/zig`; Zig is not part of the OpenWrt
@@ -283,15 +284,15 @@ translation.
 
 Enable `pac_enabled` and the service generates `/www/anytls-zig.pac`, served by
 uhttpd at `http://<LAN-IP>/anytls-zig.pac`. The proxy line is built from the LAN
-address and the SOCKS5 port in `listen`; set `listen` to `0.0.0.0:1080` so LAN
+address and the proxy port in `listen`; set `listen` to `0.0.0.0:1080` so LAN
 clients can reach it (a concrete listen host is used verbatim). The URL is also
 written to `/tmp/anytls-zig.pac.url`.
 
 Local/private hosts and the domains in
 `/usr/share/anytls-zig/china-domains.txt` go DIRECT (a curated list of common
 Chinese sites, editable), plus anything in the `pac_bypass` list; everything
-else uses the SOCKS5 proxy with a DIRECT fallback. The file is regenerated on
-service start/reload.
+else uses the proxy (SOCKS5 first, then HTTP) with a DIRECT fallback. The file
+is regenerated on service start/reload.
 
 ```sh
 uci set anytls-zig.main.listen='0.0.0.0:1080'

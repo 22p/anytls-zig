@@ -225,7 +225,7 @@ fn makeListener(addr: net.Address, backlog: u31) !posix.socket_t {
     );
     errdefer posix.close(fd);
     // SO_REUSEADDR only: SO_REUSEPORT would let a second instance silently
-    // share the SOCKS port instead of failing to bind.
+    // share the proxy port instead of failing to bind.
     const one: c_int = 1;
     posix.setsockopt(fd, posix.SOL.SOCKET, posix.SO.REUSEADDR, std.mem.asBytes(&one)) catch {};
     try posix.bind(fd, &addr.any, addr.getOsSockLen());

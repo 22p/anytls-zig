@@ -898,8 +898,8 @@ pub const Client = struct {
     }
 };
 
-/// Called by the SOCKS relay when a stream finishes. Keeps the session
-/// available for reuse (idle pool) as the reference client does.
+/// Called by the SOCKS5 and HTTP inbounds when a stream finishes. Keeps the
+/// session available for reuse (idle pool) as the reference client does.
 pub fn streamFinished(s: *Stream) void {
     const sess = s.session;
     s.closeNow();

@@ -1,11 +1,11 @@
 # anytls-zig
 
-面向 OpenWrt 与嵌入式 Linux 的轻量 AnyTLS 客户端。本地 SOCKS5 接入，对外使用
+面向 OpenWrt 与嵌入式 Linux 的轻量 AnyTLS 客户端。本地 SOCKS5/HTTP 混合接入，对外使用
 AnyTLS 协议 v2 与 TLS 1.3，不依赖 Go/JVM/运行时，不使用垃圾回收，最终产物是
 单个静态链接 ELF。配置可来自命令行参数、TOML 文件，或 OpenWrt 上的 UCI/LuCI。
 
 ```
-SOCKS5 客户端 ──► stream（多路复用）──► session ──► TLS 1.3 ──► AnyTLS 服务端 ──► 目标
+SOCKS5/HTTP 客户端 ──► stream（多路复用）──► session ──► TLS 1.3 ──► AnyTLS 服务端 ──► 目标
 ```
 
 [English README](README.md)
@@ -231,8 +231,8 @@ chmod 600 /etc/config/anytls-zig
 logread -e anytls-zig
 ```
 
-5. 让局域网客户端指向 `192.168.1.1:1080`（SOCKS5），或把它作为透明代理工具的
-   上游。默认的 `127.0.0.1:1080` 只监听回环地址。
+5. 让局域网客户端指向 `192.168.1.1:1080`（SOCKS5 或 HTTP 代理），或把它作为
+   透明代理工具的上游。默认的 `127.0.0.1:1080` 只监听回环地址。
 
 `openwrt/` 下的软件包 Makefile 假定仓库被放在 `package/anytls-zig/`，并通过
 `ZIG=/path/to/zig` 指定编译器；Zig 不属于 OpenWrt buildroot，需由构建机提供。
@@ -260,13 +260,13 @@ CI 会生成 `luci-app-anytls-zig_<version>_noarch.apk`；翻译在打包时编�
 
 打开 `pac_enabled` 后服务会生成 `/www/anytls-zig.pac`，uhttpd 通过
 `http://<LAN-IP>/anytls-zig.pac` 提供。代理地址由 LAN 地址和 `listen` 里的
-SOCKS5 端口自动生成；要让局域网设备使用，请把 `listen` 设为 `0.0.0.0:1080`
+代理端口自动生成；要让局域网设备使用，请把 `listen` 设为 `0.0.0.0:1080`
 （监听地址是具体 IP 时直接使用该 IP）。URL 同时写入
 `/tmp/anytls-zig.pac.url`。
 
 本地/私网地址和 `/usr/share/anytls-zig/china-domains.txt` 中的域名走直连
 （内置常见中国站点，可自行编辑），`pac_bypass` 列表中的域名同样直连；其余流量
-走 SOCKS5 代理，并以 DIRECT 作为回退。服务启动/重载时重新生成。
+走代理（优先 SOCKS5，其次 HTTP），并以 DIRECT 作为回退。服务启动/重载时重新生成。
 
 ```sh
 uci set anytls-zig.main.listen='0.0.0.0:1080'

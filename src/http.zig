@@ -181,7 +181,7 @@ pub fn parseHead(full: []const u8, end: usize) !Head {
 
 const AbsoluteUri = struct {
     hp: proto.HostPort,
-    /// Path + query as they must appear in the origin-form request target.
+    /// Suffix after the authority: "/path?query", a bare "?query", or empty.
     path: []const u8,
 };
 

@@ -65,12 +65,9 @@ const Request = struct {
 fn handshake(fd: posix.socket_t, addr_buf: *[262]u8) !Request {
     var hdr: [2]u8 = undefined;
     try readExact(fd, &hdr);
-    if (hdr[0] != 5) {
-        // Show the offending greeting so a wrong proxy type (HTTP "GET"/
-        // "CONNECT", SOCKS4 0x04, TLS 0x16 ...) is identifiable in the log.
-        log.debug("socks: greeting is not socks5, first bytes: {x:0>2} {x:0>2}", .{ hdr[0], hdr[1] });
-        return error.NotSocks5;
-    }
+    // inbound.zig routes on the first byte, so this only fires if the
+    // dispatcher changes; keep it as a boundary check.
+    if (hdr[0] != 5) return error.NotSocks5;
     const nmethods = hdr[1];
     if (nmethods == 0) return error.BadGreeting;
 
