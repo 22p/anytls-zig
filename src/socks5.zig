@@ -21,7 +21,10 @@ pub fn handle(client: *anytls.Client, fd: posix.socket_t, half_close_wait_ns: u6
 
     var addr_buf: [262]u8 = undefined;
     const req = handshake(fd, &addr_buf) catch |e| {
-        log.debug("socks: handshake failed: {s}", .{@errorName(e)});
+        var peer_buf: [72]u8 = undefined;
+        log.debug("socks: handshake failed: {s} (peer {s})", .{
+            @errorName(e), peerString(&peer_buf, fd),
+        });
         return;
     };
     setRecvTimeout(fd, 0);
@@ -88,7 +91,12 @@ const Request = struct {
 fn handshake(fd: posix.socket_t, addr_buf: *[262]u8) !Request {
     var hdr: [2]u8 = undefined;
     try readExact(fd, &hdr);
-    if (hdr[0] != 5) return error.NotSocks5;
+    if (hdr[0] != 5) {
+        // Show the offending greeting so a wrong proxy type (HTTP "GET"/
+        // "CONNECT", SOCKS4 0x04, TLS 0x16 ...) is identifiable in the log.
+        log.debug("socks: greeting is not socks5, first bytes: {x:0>2} {x:0>2}", .{ hdr[0], hdr[1] });
+        return error.NotSocks5;
+    }
     const nmethods = hdr[1];
     if (nmethods == 0) return error.BadGreeting;
 
@@ -149,6 +157,14 @@ fn formatTarget(buf: []u8, t: proto.Target, port: u16) []const u8 {
         .ip4 => |a| std.fmt.bufPrint(buf, "{f}", .{net.Address.initIp4(a, port)}) catch "ipv4",
         .ip6 => |a| std.fmt.bufPrint(buf, "{f}", .{net.Address.initIp6(a, port, 0, 0)}) catch "ipv6",
     };
+}
+
+fn peerString(buf: []u8, fd: posix.socket_t) []const u8 {
+    var sa: posix.sockaddr.storage = undefined;
+    var len: posix.socklen_t = @sizeOf(posix.sockaddr.storage);
+    posix.getpeername(fd, @ptrCast(&sa), &len) catch return "?";
+    const addr = net.Address.initPosix(@ptrCast(&sa));
+    return std.fmt.bufPrint(buf, "{f}", .{addr}) catch "?";
 }
 
 fn reply(fd: posix.socket_t, code: u8) void {
