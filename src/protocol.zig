@@ -30,7 +30,7 @@ pub const header_len = 7;
 pub const max_data_chunk = 16 * 1024;
 
 pub const protocol_version: u8 = 2;
-pub const client_name = "anytls-zig/0.1.0";
+pub const client_name = "anytls-zig/0.1.9";
 
 pub fn encodeHeader(h: *[header_len]u8, cmd: Command, sid: u32, data_len: usize) void {
     std.debug.assert(data_len <= std.math.maxInt(u16));

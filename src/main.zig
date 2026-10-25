@@ -11,7 +11,7 @@ const config = @import("config.zig");
 const toml = @import("toml.zig");
 const log = @import("log.zig");
 
-const version = "0.1.0";
+const version = "0.1.9";
 
 var stop_flag = std.atomic.Value(bool).init(false);
 

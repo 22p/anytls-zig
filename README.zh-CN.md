@@ -21,7 +21,7 @@ SOCKS5/HTTP 客户端 ──► stream（多路复用）──► session ──
 | 认证 | `sha256(password)` 32 字节，padding0 长度 `u16 BE`，padding0 数据 |
 | 帧 | `cmd u8` + `streamId u32 BE` + `dataLen u16 BE` + data |
 | 命令 | `0 waste, 1 SYN, 2 PSH, 3 FIN, 4 Settings, 5 Alert, 6 UpdatePaddingScheme, 7 SYNACK, 8 HeartRequest, 9 HeartResponse, 10 ServerSettings` |
-| Settings | `v=2\nclient=anytls-zig/0.1.0\npadding-md5=<方案的 md5>` |
+| Settings | `v=2\nclient=anytls-zig/0.1.9\npadding-md5=<方案的 md5>` |
 | 目标地址 | SOCKS5 地址格式：`ATYP | addr | port BE` |
 | 填充 | 默认方案 `stop=8 ...` 与参考实现逐字节一致；默认方案的 `padding-md5` 为 `75cff2ad89aadf5e257059ee571ebe11` |
 

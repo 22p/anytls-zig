@@ -22,7 +22,7 @@ The wire format follows the reference implementation
 | Auth | `sha256(password)` 32 B, padding0 length `u16 BE`, padding0 bytes |
 | Frame | `cmd u8` + `streamId u32 BE` + `dataLen u16 BE` + data |
 | Commands | `0 waste, 1 SYN, 2 PSH, 3 FIN, 4 Settings, 5 Alert, 6 UpdatePaddingScheme, 7 SYNACK, 8 HeartRequest, 9 HeartResponse, 10 ServerSettings` |
-| Settings | `v=2\nclient=anytls-zig/0.1.0\npadding-md5=<md5 of scheme>` |
+| Settings | `v=2\nclient=anytls-zig/0.1.9\npadding-md5=<md5 of scheme>` |
 | Target | SOCKS5 address: `ATYP | addr | port BE` |
 | Padding | Default scheme `stop=8 ...` byte-identical to the reference; `padding-md5` for the default scheme is `75cff2ad89aadf5e257059ee571ebe11` |
 
