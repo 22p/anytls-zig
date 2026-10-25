@@ -121,13 +121,21 @@ jobs:
             optimize: ReleaseFast
             variant: "-fast"
             owrt_arch: aarch64_cortex-a53
-          - name: x86_64-musl
+          - name: x86_64-v1-musl
             target: x86_64-linux-musl
-            cpu: "baseline+aes+pclmul+avx"
+            cpu: baseline
             match: "x86-64"
             abi: ""
             optimize: ReleaseFast
-            variant: ""
+            variant: "-v1"
+            owrt_arch: x86_64
+          - name: x86_64-v3-musl
+            target: x86_64-linux-musl
+            cpu: "x86_64_v3+aes+pclmul"
+            match: "x86-64"
+            abi: ""
+            optimize: ReleaseFast
+            variant: "-v3"
             owrt_arch: x86_64
     steps:
       - uses: actions/checkout@v4

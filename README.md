@@ -121,19 +121,28 @@ Notes:
   (`-Dcpu=cortex_a7-neon`), so it runs on any ARMv7 hard-float target. It is
   packaged under both `arm_cortex-a7` and `arm_cortex-a7_neon-vfpv4`.
 * CI publishes two builds per architecture — `ReleaseSmall` (no suffix) and
-  `ReleaseFast` (`-fast`) — except x86-64, which ships only `ReleaseFast`.
-  Sizes (Zig 0.15.2, stripped):
+  `ReleaseFast` (`-fast`). x86-64 instead publishes two CPU tiers, both
+  `ReleaseFast`:
+
+  * `anytls-zig-x86_64-v1-musl` — `-Dcpu=baseline`: any x86-64 CPU, software
+    AES.
+  * `anytls-zig-x86_64-v3-musl` — `x86_64_v3+aes+pclmul`: needs AVX2
+    (Haswell, 2013+); hardware AES-GCM/GHASH. `std.crypto` only takes those
+    paths when AVX is enabled at compile time, which the v3 level implies.
+
+  Sizes (Zig 0.15.1, stripped):
 
   | Architecture | `ReleaseSmall` | `ReleaseFast` |
   |---|---:|---:|
-  | aarch64 (fast: `+aes+sha2`) | 372 KB | 712 KB |
-  | armv7 | 581 KB | 997 KB |
-  | mips / mipsel | 841 KB | 1.68 MB |
-  | x86-64 (fast: `+aes+pclmul+avx`) | – | 788 KB |
+  | aarch64 (fast: `+aes+sha2`) | 379 KB | 735 KB |
+  | armv7 | 584 KB | 1.01 MB |
+  | mips / mipsel | 850 KB | 1.65 MB |
+  | x86-64 v1 (`baseline`, no AES) | – | 840 KB |
+  | x86-64 v3 (`x86_64_v3+aes+pclmul`) | – | 848 KB |
 
   Use the small build on flash-constrained routers; under QEMU the fast build
-  is roughly 1.2× (MIPS) to 1.5× (ARMv7) quicker, and on x86-64 it is about
-  3× quicker than the small build. Measurements:
+  is roughly 1.2× (MIPS) to 1.5× (ARMv7) quicker than the small build. The
+  x86-64 tiers differ in CPU features rather than size. Measurements:
   [docs/bench-aarch64.md](docs/bench-aarch64.md).
 * `scripts/make-apk.sh` wraps a built binary into an OpenWrt apk; the CI
   workflow builds apks for all targets.

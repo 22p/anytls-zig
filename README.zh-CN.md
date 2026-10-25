@@ -110,17 +110,25 @@ readelf -h -l zig-out/bin/anytls-zig   # 无 INTERP、无 NEEDED
   任意 ARMv7 硬浮点目标上；打包时同时生成 `arm_cortex-a7` 和
   `arm_cortex-a7_neon-vfpv4` 两个标签。
 * CI 每种架构产出两个构建——`ReleaseSmall`（无后缀）和 `ReleaseFast`
-  （`-fast`）——x86-64 只发布 `ReleaseFast`。体积（Zig 0.15.2，已 strip）：
+  （`-fast`）；x86-64 改为两个 CPU 档次，均为 `ReleaseFast`：
+
+  * `anytls-zig-x86_64-v1-musl`——`-Dcpu=baseline`：任意 x86-64 CPU，软件 AES。
+  * `anytls-zig-x86_64-v3-musl`——`x86_64_v3+aes+pclmul`：需要 AVX2
+    （Haswell，2013+）；硬件 AES-GCM/GHASH（`std.crypto` 要求编译期开启 AVX
+    才走硬件路径，v3 档次本身即隐含 AVX）。
+
+  体积（Zig 0.15.1，已 strip）：
 
   | 架构 | `ReleaseSmall` | `ReleaseFast` |
   |---|---:|---:|
-  | aarch64（fast 用 `+aes+sha2`） | 372 KB | 712 KB |
-  | armv7 | 581 KB | 997 KB |
-  | mips / mipsel | 841 KB | 1.68 MB |
-  | x86-64（fast 用 `+aes+pclmul+avx`） | – | 788 KB |
+  | aarch64（fast 用 `+aes+sha2`） | 379 KB | 735 KB |
+  | armv7 | 584 KB | 1.01 MB |
+  | mips / mipsel | 850 KB | 1.65 MB |
+  | x86-64 v1（`baseline`，无 AES） | – | 840 KB |
+  | x86-64 v3（`x86_64_v3+aes+pclmul`） | – | 848 KB |
 
   flash 紧张的路由器用 small；QEMU 下 fast 约快 1.2 倍（MIPS）到 1.5 倍
-  （ARMv7），x86-64 上约快 3 倍。实测见
+  （ARMv7）；x86-64 三档的差别在指令集而非体积。实测见
   [docs/bench-aarch64.md](docs/bench-aarch64.md)。
 * `scripts/make-apk.sh` 可把已构建的二进制打成 OpenWrt apk；CI 会为所有目标生成。
 * `scripts/make-luci-apk.sh` 生成与架构无关的 `luci-app-anytls-zig` apk，并在打包时
