@@ -7,7 +7,7 @@ return view.extend({
 		var m, s, o;
 
 		m = new form.Map('anytls-zig', _('AnyTLS Zig'),
-			_('AnyTLS (protocol v2) client with a SOCKS5 inbound. TLS 1.3 with certificate chain and hostname verification.'));
+			_('AnyTLS (protocol v2) client with a mixed SOCKS5/HTTP inbound. TLS 1.3 with certificate chain and hostname verification.'));
 
 		s = m.section(form.NamedSection, 'main', 'anytls-zig', _('Settings'));
 		s.anonymous = true;
@@ -18,14 +18,14 @@ return view.extend({
 		o.rmempty = false;
 		o.description = _('Start the client automatically when the system boots.');
 
-		o = s.option(form.Value, 'listen', _('SOCKS5 listen address'));
+		o = s.option(form.Value, 'listen', _('SOCKS5/HTTP listen address'));
 		o.datatype = 'hostport';
 		o.placeholder = '127.0.0.1:1080';
 		o.default = '127.0.0.1:1080';
-		o.description = _('Use 0.0.0.0:1080 to serve the LAN; the default listens on loopback only.');
+		o.description = _('Accepts both SOCKS5 and HTTP proxy clients. Use 0.0.0.0:1080 to serve the LAN; the default listens on loopback only.');
 
 		o = s.option(form.Flag, 'pac_enabled', _('Serve PAC file'),
-			_('The service writes /www/anytls-zig.pac. The proxy line uses the LAN address and the SOCKS5 port from the listen option; set listen to 0.0.0.0:1080 so LAN clients can reach it.'));
+			_('The service writes /www/anytls-zig.pac. The proxy line uses the LAN address and the proxy port from the listen option; set listen to 0.0.0.0:1080 so LAN clients can reach it.'));
 		o.default = '0';
 		o.rmempty = false;
 

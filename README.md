@@ -348,7 +348,7 @@ a locally generated CA and a `localhost` certificate, and a local HTTP origin.
 |---|---|
 | Unit tests: frame codec, SOCKS address encoding, UDP/UoT framing, HTTP request parsing/rewrite, default scheme MD5 (`75cff2ad…`), padding parsing/size generation, settings, bounded pipe, TOML parser, option precedence, shipped example config | 21/21 pass |
 | TOML config end-to-end: config-only startup, CLI override, password in TOML, duplicate key/unknown key/type/table diagnostics | pass |
-| LuCI catalog coverage (`scripts/check-luci-i18n.py`) | 35/35 strings translated |
+| LuCI catalog coverage (`scripts/check-luci-i18n.py`) | 37/37 strings translated |
 | TLS 1.3 + chain + SNI | `tls_1_3` negotiated; `CertificateHostMismatch` with wrong SNI |
 | SOCKS5 CONNECT, IPv4 target | 200 / correct body |
 | HTTP CONNECT tunnel | 200 / correct body |

@@ -320,7 +320,7 @@ RSS、2 个线程；10 个并发会话加 10 个活跃 stream 时约 2.9 MB（�
 |---|---|
 | 单元测试：帧编解码、SOCKS 地址编码、UDP/UoT 组帧、HTTP 请求解析/改写、默认方案 MD5（`75cff2ad…`）、填充解析与尺寸生成、settings、有界管道、TOML 解析、配置优先级、随附示例配置 | 21/21 通过 |
 | TOML 配置端到端：仅用配置文件启动、命令行覆盖、TOML 中的密码、重复键/未知键/类型/表头错误诊断 | 通过 |
-| LuCI 翻译覆盖（`scripts/check-luci-i18n.py`） | 35/35 条已翻译 |
+| LuCI 翻译覆盖（`scripts/check-luci-i18n.py`） | 37/37 条已翻译 |
 | TLS 1.3 + 证书链 + SNI | 协商为 `tls_1_3`；错误 SNI 报 `CertificateHostMismatch` |
 | SOCKS5 CONNECT，IPv4 目标 | 200 / 内容正确 |
 | HTTP CONNECT 隧道 | 200 / 内容正确 |

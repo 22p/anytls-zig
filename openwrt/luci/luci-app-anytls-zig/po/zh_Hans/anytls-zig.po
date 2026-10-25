@@ -15,8 +15,8 @@ msgstr ""
 msgid "AnyTLS Zig"
 msgstr "AnyTLS Zig"
 
-msgid "AnyTLS (protocol v2) client with a SOCKS5 inbound. TLS 1.3 with certificate chain and hostname verification."
-msgstr "AnyTLS（协议 v2）客户端，提供 SOCKS5 本地入口，使用 TLS 1.3 并校验证书链与主机名。"
+msgid "AnyTLS (protocol v2) client with a mixed SOCKS5/HTTP inbound. TLS 1.3 with certificate chain and hostname verification."
+msgstr "AnyTLS（协议 v2）客户端，提供 SOCKS5/HTTP 混合本地入口，使用 TLS 1.3 并校验证书链与主机名。"
 
 msgid "Settings"
 msgstr "设置"
@@ -27,11 +27,11 @@ msgstr "启用"
 msgid "Start the client automatically when the system boots."
 msgstr "系统启动时自动运行客户端。"
 
-msgid "SOCKS5 listen address"
-msgstr "SOCKS5 监听地址"
+msgid "SOCKS5/HTTP listen address"
+msgstr "SOCKS5/HTTP 监听地址"
 
-msgid "Use 0.0.0.0:1080 to serve the LAN; the default listens on loopback only."
-msgstr "使用 0.0.0.0:1080 可供局域网使用；默认仅监听回环地址。"
+msgid "Accepts both SOCKS5 and HTTP proxy clients. Use 0.0.0.0:1080 to serve the LAN; the default listens on loopback only."
+msgstr "同时接受 SOCKS5 与 HTTP 代理客户端。设为 0.0.0.0:1080 可服务局域网；默认只监听回环地址。"
 
 msgid "Server address"
 msgstr "服务器地址"
@@ -108,8 +108,8 @@ msgstr "调试"
 msgid "Serve PAC file"
 msgstr "提供 PAC 文件"
 
-msgid "The service writes /www/anytls-zig.pac. The proxy line uses the LAN address and the SOCKS5 port from the listen option; set listen to 0.0.0.0:1080 so LAN clients can reach it."
-msgstr "服务会生成 /www/anytls-zig.pac，代理地址使用 LAN 地址和监听选项里的 SOCKS5 端口；要让局域网设备使用，请把监听地址设为 0.0.0.0:1080。"
+msgid "The service writes /www/anytls-zig.pac. The proxy line uses the LAN address and the proxy port from the listen option; set listen to 0.0.0.0:1080 so LAN clients can reach it."
+msgstr "服务会生成 /www/anytls-zig.pac，代理地址使用 LAN 地址和监听选项里的代理端口；要让局域网设备使用，请把监听地址设为 0.0.0.0:1080。"
 
 msgid "PAC bypass domains"
 msgstr "PAC 直连域名"
