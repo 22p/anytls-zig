@@ -1,11 +1,12 @@
 //! anytls-zig: minimal AnyTLS (protocol v2) client for OpenWrt / MIPS.
-//! SOCKS5 inbound -> AnyTLS stream -> TLS 1.3 -> remote server.
+//! Mixed SOCKS5 + HTTP inbound -> AnyTLS stream -> TLS 1.3 -> remote server.
 
 const std = @import("std");
 const posix = std.posix;
 const net = std.net;
 const anytls = @import("anytls.zig");
-const socks5 = @import("socks5.zig");
+const inbound = @import("inbound.zig");
+const proto = @import("protocol.zig");
 const config = @import("config.zig");
 const toml = @import("toml.zig");
 const log = @import("log.zig");
@@ -38,7 +39,7 @@ const usage =
     \\       anytls-zig -c /etc/anytls-zig/config.toml [options]
     \\       anytls-zig -s 'anytls://password@host:port?sni=example.com' [options]
     \\
-    \\  -l, --listen <addr:port>   SOCKS5 listen address (default 127.0.0.1:1080)
+    \\  -l, --listen <addr:port>   mixed SOCKS5/HTTP listen address (default 127.0.0.1:1080)
     \\  -s, --server <host:port>   AnyTLS server, optionally an anytls:// URI
     \\  -c, --config <file>        read options from a TOML file (CLI wins)
     \\  -p, --password <pw>        password (or ANYTLS_PASSWORD to keep it out of argv)
@@ -109,7 +110,7 @@ pub fn main() void {
     log.setLevel(cfg.level);
 
     if (cfg.server.len == 0) fatal("missing server address (-s/--server or [server] address)", .{});
-    const hp = splitHostPort(cfg.server, 443) catch fatal("bad server address: {s}", .{cfg.server});
+    const hp = proto.splitHostPort(cfg.server, 443) catch fatal("bad server address: {s}", .{cfg.server});
 
     var pw: []const u8 = undefined;
     switch (cfg.password) {
@@ -156,7 +157,7 @@ pub fn main() void {
         log.warn("TLS verification disabled (--insecure); do not use in production", .{});
     }
 
-    const listen_hp = splitHostPort(cfg.listen, 1080) catch fatal("bad listen address: {s}", .{cfg.listen});
+    const listen_hp = proto.splitHostPort(cfg.listen, 1080) catch fatal("bad listen address: {s}", .{cfg.listen});
     const listen_addr = resolveOne(alloc, listen_hp.host, listen_hp.port) catch
         fatal("cannot resolve listen address: {s}", .{cfg.listen});
     const listen_fd = makeListener(listen_addr, 128) catch |e|
@@ -177,7 +178,7 @@ pub fn main() void {
     }) catch |e| fatal("client init failed: {s}", .{@errorName(e)});
 
     log.info("anytls-zig {s} (protocol v2, TLS 1.3)", .{version});
-    log.info("socks5 {s} -> {s}:{d} sni={s} verify={s}", .{
+    log.info("socks5/http {s} -> {s}:{d} sni={s} verify={s}", .{
         cfg.listen,
         hp.host,
         hp.port,
@@ -202,7 +203,7 @@ pub fn main() void {
         log.debug("accepted connection", .{});
         const t = std.Thread.spawn(
             .{ .stack_size = 512 * 1024 },
-            socks5.handle,
+            inbound.handle,
             .{ client, fd, cfg.half_close_wait_s * std.time.ns_per_s },
         ) catch |e| {
             log.err("cannot spawn connection thread: {s}", .{@errorName(e)});
@@ -247,26 +248,6 @@ fn resolveOne(alloc: std.mem.Allocator, host: []const u8, port: u16) !net.Addres
     defer list.deinit();
     if (list.addrs.len == 0) return error.UnknownHostName;
     return list.addrs[0];
-}
-
-const HostPort = struct { host: []const u8, port: u16 };
-
-fn splitHostPort(s_in: []const u8, default_port: u16) !HostPort {
-    if (s_in.len == 0) return error.BadAddress;
-    if (s_in[0] == '[') {
-        const close = std.mem.indexOfScalar(u8, s_in, ']') orelse return error.BadAddress;
-        const host = s_in[1..close];
-        const rest = s_in[close + 1 ..];
-        if (rest.len < 2 or rest[0] != ':') return error.BadAddress;
-        const port = try std.fmt.parseInt(u16, rest[1..], 10);
-        return .{ .host = host, .port = port };
-    }
-    const idx = std.mem.lastIndexOfScalar(u8, s_in, ':') orelse
-        return .{ .host = s_in, .port = default_port };
-    const host = s_in[0..idx];
-    if (host.len == 0) return error.BadAddress;
-    const port = try std.fmt.parseInt(u16, s_in[idx + 1 ..], 10);
-    return .{ .host = host, .port = port };
 }
 
 fn parseArgs(

@@ -2,12 +2,14 @@
 //! client's local entry point. Target names are forwarded to the server
 //! unresolved, so DNS happens on the proxy side unless the client sends a
 //! literal address. UDP associations are carried over TCP with UoT v2.
+//! Shares the listen port with the HTTP inbound via inbound.zig.
 
 const std = @import("std");
 const net = std.net;
 const posix = std.posix;
 const anytls = @import("anytls.zig");
 const proto = @import("protocol.zig");
+const relay = @import("relay.zig");
 const udp = @import("udp.zig");
 const log = @import("log.zig");
 
@@ -43,21 +45,7 @@ pub fn handle(client: *anytls.Client, fd: posix.socket_t, half_close_wait_ns: u6
         reply(fd, 0x01);
         return;
     };
-
-    // Second reference for the stream->local pump.
-    stream.acquire();
-    var relay: Relay = .{};
-    const thread = std.Thread.spawn(
-        .{ .stack_size = 96 * 1024 },
-        pumpToLocal,
-        .{ stream, fd, &relay },
-    ) catch |e| {
-        log.err("socks: cannot start relay thread: {s}", .{@errorName(e)});
-        stream.release();
-        reply(fd, 0x01);
-        anytls.streamFinished(stream);
-        return;
-    };
+    defer anytls.streamFinished(stream);
 
     reply(fd, 0x00);
     var show_buf: [96]u8 = undefined;
@@ -65,21 +53,7 @@ pub fn handle(client: *anytls.Client, fd: posix.socket_t, half_close_wait_ns: u6
         formatTarget(&show_buf, req.target, req.port), stream.sessionSeq(), stream.id,
     });
 
-    pumpToRemote(stream, fd);
-
-    if (!relay.wait(half_close_wait_ns)) {
-        // Peer never sent its FIN. anytls-go servers close the stream on our
-        // FIN without replying, so waiting forever would leak the thread.
-        log.debug("socks: half-close grace expired, tearing down", .{});
-        posix.shutdown(fd, .both) catch {};
-        if (!relay.wait(2 * std.time.ns_per_s)) {
-            // The pump is still blocked reading the stream; aborting the
-            // pipe wakes it. Must happen before join().
-            stream.closeNow();
-        }
-    }
-    thread.join();
-    anytls.streamFinished(stream);
+    relay.run(stream, fd, half_close_wait_ns);
 }
 
 const Request = struct {
@@ -169,61 +143,6 @@ fn peerString(buf: []u8, fd: posix.socket_t) []const u8 {
 
 fn reply(fd: posix.socket_t, code: u8) void {
     writeAll(fd, &.{ 5, code, 0, 1, 0, 0, 0, 0, 0, 0 }) catch {};
-}
-
-const Relay = struct {
-    mutex: std.Thread.Mutex = .{},
-    cond: std.Thread.Condition = .{},
-    done: bool = false,
-
-    fn finish(self: *Relay) void {
-        self.mutex.lock();
-        self.done = true;
-        self.cond.broadcast();
-        self.mutex.unlock();
-    }
-
-    fn wait(self: *Relay, timeout_ns: u64) bool {
-        self.mutex.lock();
-        if (!self.done) {
-            self.cond.timedWait(&self.mutex, timeout_ns) catch {};
-        }
-        const d = self.done;
-        self.mutex.unlock();
-        return d;
-    }
-};
-
-fn pumpToLocal(stream: *anytls.Stream, fd: posix.socket_t, relay: *Relay) void {
-    defer relay.finish();
-    defer stream.release();
-
-    var buf: [16 * 1024]u8 = undefined;
-    while (true) {
-        const n = stream.read(&buf) orelse break;
-        if (n == 0) continue;
-        writeAll(fd, buf[0..n]) catch {
-            posix.shutdown(fd, .both) catch {};
-            return;
-        };
-    }
-    if (stream.wasAborted()) {
-        posix.shutdown(fd, .both) catch {};
-    } else {
-        // Remote half-closed: propagate EOF to the local application, but keep
-        // reading from it so it can still send (TCP half close).
-        posix.shutdown(fd, .send) catch {};
-    }
-}
-
-fn pumpToRemote(stream: *anytls.Stream, fd: posix.socket_t) void {
-    var buf: [16 * 1024]u8 = undefined;
-    while (true) {
-        const n = posix.read(fd, &buf) catch break;
-        if (n == 0) break;
-        stream.write(buf[0..n]) catch break;
-    }
-    stream.sendFin();
 }
 
 fn readExact(fd: posix.socket_t, out: []u8) !void {

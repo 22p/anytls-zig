@@ -6,6 +6,7 @@ const toml = @import("toml.zig");
 const config = @import("config.zig");
 const log = @import("log.zig");
 const udp = @import("udp.zig");
+const http = @import("http.zig");
 
 test "frame header roundtrip" {
     var h: [proto.header_len]u8 = undefined;
@@ -254,4 +255,57 @@ test "uot request encodes address families for udp-over-tcp v2" {
     try testing.expectEqual(@as(u8, 11), dom[2]);
     try testing.expectEqualStrings("dns.example", dom[3..14]);
     try testing.expectEqual(@as(u16, 5353), std.mem.readInt(u16, dom[14..16], .big));
+}
+
+test "http request head parsing" {
+    const req = "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com\r\n\r\n";
+    const head = try http.parseHead(req, req.len);
+    try testing.expectEqualStrings("CONNECT", head.method);
+    try testing.expectEqualStrings("example.com:443", head.target);
+    try testing.expectEqualStrings("HTTP/1.1", head.version);
+    try testing.expectEqual(@as(usize, req.len), head.end);
+
+    const bad = "GET / HTTP/1.1";
+    try testing.expectError(error.BadRequest, http.parseHead(bad, bad.len));
+}
+
+test "http absolute uri and forward rewrite" {
+    const req = "GET http://example.com:8080/a/b?q=1 HTTP/1.1\r\n" ++
+        "Host: example.com\r\n" ++
+        "Proxy-Connection: keep-alive\r\n" ++
+        "Proxy-Authorization: Basic xx\r\n" ++
+        "User-Agent: t\r\n\r\n" ++
+        "BODY";
+    const end = std.mem.indexOf(u8, req, "\r\n\r\n").? + 4;
+    const head = try http.parseHead(req, end);
+    try testing.expectEqualStrings("BODY", head.full[head.end..]);
+
+    const uri = try http.parseAbsoluteUri(head.target);
+    try testing.expectEqualStrings("example.com", uri.hp.host);
+    try testing.expectEqual(@as(u16, 8080), uri.hp.port);
+    try testing.expectEqualStrings("/a/b?q=1", uri.path);
+
+    var out: [512]u8 = undefined;
+    const fwd = try http.buildForwardRequest(&out, head, uri.path);
+    try testing.expectEqualStrings(
+        "GET /a/b?q=1 HTTP/1.1\r\nHost: example.com\r\nUser-Agent: t\r\n\r\n",
+        fwd,
+    );
+}
+
+test "http bare query gets a slash and origin-form uses Host" {
+    const q = "GET http://ex.test?q=1 HTTP/1.1\r\nHost: ex.test\r\n\r\n";
+    const qend = q.len;
+    const qhead = try http.parseHead(q, qend);
+    const uri = try http.parseAbsoluteUri(qhead.target);
+    try testing.expectEqualStrings("?q=1", uri.path);
+    var out: [256]u8 = undefined;
+    const fwd = try http.buildForwardRequest(&out, qhead, uri.path);
+    try testing.expectEqualStrings("GET /?q=1 HTTP/1.1\r\nHost: ex.test\r\n\r\n", fwd);
+
+    const o = "GET /path HTTP/1.1\r\nHost: h.test:8080\r\n\r\n";
+    const ohead = try http.parseHead(o, o.len);
+    const hp = http.hostFromHeaders(ohead).?;
+    try testing.expectEqualStrings("h.test", hp.host);
+    try testing.expectEqual(@as(u16, 8080), hp.port);
 }

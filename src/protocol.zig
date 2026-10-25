@@ -88,6 +88,27 @@ pub fn encodeTarget(buf: []u8, target: Target, port: u16) ![]u8 {
     return buf[0 .. n + 2];
 }
 
+pub const HostPort = struct { host: []const u8, port: u16 };
+
+/// Split `host:port`, `[v6]:port`, or a bare `host` (using default_port).
+pub fn splitHostPort(s_in: []const u8, default_port: u16) !HostPort {
+    if (s_in.len == 0) return error.BadAddress;
+    if (s_in[0] == '[') {
+        const close = std.mem.indexOfScalar(u8, s_in, ']') orelse return error.BadAddress;
+        const host = s_in[1..close];
+        const rest = s_in[close + 1 ..];
+        if (rest.len < 2 or rest[0] != ':') return error.BadAddress;
+        const port = try std.fmt.parseInt(u16, rest[1..], 10);
+        return .{ .host = host, .port = port };
+    }
+    const idx = std.mem.lastIndexOfScalar(u8, s_in, ':') orelse
+        return .{ .host = s_in, .port = default_port };
+    const host = s_in[0..idx];
+    if (host.len == 0) return error.BadAddress;
+    const port = try std.fmt.parseInt(u16, s_in[idx + 1 ..], 10);
+    return .{ .host = host, .port = port };
+}
+
 // ---------------------------------------------------------------------------
 // Padding scheme
 // ---------------------------------------------------------------------------
