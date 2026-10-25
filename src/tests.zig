@@ -239,17 +239,14 @@ test "socks5 udp packet parse and rebuild" {
 test "uot request encodes address families for udp-over-tcp v2" {
     var buf: [300]u8 = undefined;
 
-    const v4 = udp.buildUotRequest(&buf, .{ .atyp = 1, .addr = .{ 9, 8, 7, 6 } ++ @as([12]u8, @splat(0)), .port = 53 });
+    var v4_key: udp.Key = .{ .atyp = 1, .port = 53 };
+    v4_key.addr[0..4].* = .{ 9, 8, 7, 6 };
+    const v4 = udp.buildUotRequest(&buf, v4_key);
     try testing.expectEqualSlices(u8, &.{ 1, 1, 9, 8, 7, 6, 0, 53 }, v4);
 
-    var name: [16]u8 = @splat(0);
-    @memcpy(name[0..11], "dns.example");
-    const dom = udp.buildUotRequest(&buf, .{
-        .atyp = 3,
-        .addr = name,
-        .dlen = 11,
-        .port = 5353,
-    });
+    var dom_key: udp.Key = .{ .atyp = 3, .dlen = 11, .port = 5353 };
+    @memcpy(dom_key.addr[0..11], "dns.example");
+    const dom = udp.buildUotRequest(&buf, dom_key);
     try testing.expectEqual(@as(u8, 1), dom[0]);
     try testing.expectEqual(@as(u8, 0x03), dom[1]);
     try testing.expectEqual(@as(u8, 11), dom[2]);
@@ -308,4 +305,32 @@ test "http bare query gets a slash and origin-form uses Host" {
     const hp = http.hostFromHeaders(ohead).?;
     try testing.expectEqualStrings("h.test", hp.host);
     try testing.expectEqual(@as(u16, 8080), hp.port);
+}
+
+test "socks5 udp packet accepts a long domain name" {
+    const name = "very-long.example-domain-name.test";
+    var pkt: [300]u8 = undefined;
+    pkt[0] = 0;
+    pkt[1] = 0;
+    pkt[2] = 0;
+    pkt[3] = 3;
+    pkt[4] = name.len;
+    @memcpy(pkt[5..][0..name.len], name);
+    const port_off = 5 + name.len;
+    std.mem.writeInt(u16, pkt[port_off..][0..2], 53, .big);
+    pkt[port_off + 2] = 'h';
+    pkt[port_off + 3] = 'i';
+    const p = try udp.parseUdpPacket(pkt[0 .. port_off + 4]);
+    try testing.expectEqual(@as(u8, 3), p.key.atyp);
+    try testing.expectEqual(@as(u8, name.len), p.key.dlen);
+    try testing.expectEqualStrings(name, p.key.addr[0..p.key.dlen]);
+    try testing.expectEqualStrings("hi", p.payload);
+}
+
+test "socks5 udp header fits the longest domain" {
+    var key: udp.Key = .{ .atyp = 3, .dlen = 255, .port = 53 };
+    @memset(key.addr[0..255], 'a');
+    var out: [300]u8 = undefined;
+    const hdr = udp.buildSocksUdpHeader(out[0..udp.header_max], key);
+    try testing.expectEqual(@as(usize, 262), hdr.len);
 }

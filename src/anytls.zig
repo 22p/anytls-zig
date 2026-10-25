@@ -240,6 +240,12 @@ const Session = struct {
 
         const stream = try Stream.create(self, sid);
         errdefer stream.release();
+        // Set before the stream is published: the janitor reads this field
+        // under streams_mutex, and a torn read on 32-bit targets would close
+        // healthy sessions.
+        if (self.peer_version.load(.acquire) >= 2 and sid >= 2) {
+            stream.syn_deadline_ms = std.time.milliTimestamp() + self.client.cfg.syn_timeout_ms;
+        }
         try self.insertStream(sid, stream);
         errdefer if (self.removeStream(sid)) |st| st.release();
 
@@ -249,6 +255,9 @@ const Session = struct {
         if (!self.started) {
             // Packet 1: settings + SYN + PSH(target). One TLS write, as in the
             // reference client, so the first padding packet is shaped correctly.
+            // Scratch is filled without write_mutex: the first stream is always
+            // opened before the session can be pooled, so no other thread can be
+            // writing on this session yet.
             var settings_buf: [160]u8 = undefined;
             const sd = proto.buildSettings(&settings_buf, self.scheme);
 
@@ -273,10 +282,6 @@ const Session = struct {
             var abuf: [262]u8 = undefined;
             const addr = try proto.encodeTarget(&abuf, target, port);
             try self.writeData(sid, addr);
-        }
-
-        if (self.peer_version.load(.acquire) >= 2 and sid >= 2) {
-            stream.syn_deadline_ms = std.time.milliTimestamp() + self.client.cfg.syn_timeout_ms;
         }
         return stream;
     }
@@ -903,6 +908,13 @@ pub const Client = struct {
 pub fn streamFinished(s: *Stream) void {
     const sess = s.session;
     s.closeNow();
-    if (!sess.isDead() and sess.refs.load(.acquire) > 0) sess.client.insertIdle(sess);
+    if (!sess.isDead()) {
+        sess.client.insertIdle(sess);
+        // insertIdle refuses when every pooled session is still busy. Such a
+        // session would stay alive but unreachable, so close it once its last
+        // stream is gone (openStream falls back to a fresh session if it was
+        // handed out concurrently).
+        if (!sess.in_pool.load(.acquire) and sess.active.load(.acquire) == 0) sess.close();
+    }
     s.release();
 }

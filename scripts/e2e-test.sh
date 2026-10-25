@@ -112,6 +112,18 @@ else
 	bad "domain target forwarded to server"
 fi
 
+# --- 2b. HTTP proxy on the same port (mixed inbound) ----------------------
+if [ "$(curl -sS -m 10 --noproxy '' -x http://127.0.0.1:11080 http://127.0.0.1:18080/small.txt)" = "hello-anytls" ]; then
+	ok "HTTP proxy, absolute-form request"
+else
+	bad "HTTP proxy, absolute-form request"
+fi
+if [ "$(curl -sS -m 10 --noproxy '' --proxytunnel -x http://127.0.0.1:11080 http://127.0.0.1:18080/small.txt)" = "hello-anytls" ]; then
+	ok "HTTP CONNECT tunnel"
+else
+	bad "HTTP CONNECT tunnel"
+fi
+
 # --- 3. large transfer ----------------------------------------------------
 curl -sS -m 60 --socks5 127.0.0.1:11080 -o "$WORK/dl.bin" http://127.0.0.1:18080/big.bin
 if [ "$(sha256sum "$WORK/dl.bin" | cut -d' ' -f1)" = "$BIG_SHA" ]; then

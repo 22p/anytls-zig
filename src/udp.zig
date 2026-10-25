@@ -19,12 +19,14 @@ const max_datagram = 65535;
 /// sing-box's UoT reader allocates buf.UDPBufferSize (16 KiB standard, 8 KiB on
 /// low-memory builds); larger datagrams make the server close the stream.
 const max_uot_payload = 16 * 1024;
-const header_max = 3 + 1 + 255 + 2;
+// RSV(2) + FRAG(1) + ATYP(1) + LEN(1) + domain(255) + port(2).
+pub const header_max = 3 + 1 + 1 + 255 + 2;
 
 /// Destination key: SOCKS5 address type (1/3/4), address bytes, port.
+/// A domain may be up to 255 bytes, so the buffer covers the SOCKS5 maximum.
 pub const Key = struct {
     atyp: u8 = 0,
-    addr: [16]u8 = @splat(0),
+    addr: [255]u8 = @splat(0),
     dlen: u8 = 0,
     port: u16 = 0,
 };
@@ -405,7 +407,7 @@ pub fn buildSocksUdpHeader(out: []u8, key: Key) []u8 {
             out[3] = 3;
             out[4] = key.dlen;
             @memcpy(out[5..][0..key.dlen], key.addr[0..key.dlen]);
-            n = 5 + key.dlen;
+            n = 5 + @as(usize, key.dlen);
         },
         else => return out[0..0],
     }
